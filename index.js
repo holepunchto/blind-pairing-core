@@ -95,6 +95,10 @@ class PairingRequest {
   }
 
   static from (req) {
+    if (b4a.isBuffer(req)) {
+      return PairingRequest.from(c.decode(InviteRequest, req))
+    }
+
     return new PairingRequest(
       req.discoveryKey,
       req.id,
