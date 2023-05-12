@@ -285,7 +285,6 @@ function getKeyPair (seed) {
   const secretKey = b4a.allocUnsafe(sodium.crypto_sign_SECRETKEYBYTES)
 
   sodium.crypto_sign_seed_keypair(publicKey, secretKey, seed)
-  sodium.crypto_sign_seed_keypair(publicKey, secretKey, seed)
 
   return { publicKey, secretKey }
 }
