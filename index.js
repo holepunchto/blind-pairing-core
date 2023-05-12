@@ -8,6 +8,8 @@ const c = require('compact-encoding')
 const {
   Invite,
   InvitePayload,
+  InviteRequest,
+  InviteResponse,
   InviteData,
   AuthData
 } = require('./lib/messages')
@@ -141,38 +143,38 @@ class PairingRequest {
   }
 }
 
-class KeetPairing extends EventEmitter {
-  constructor () {
-    super()
+class KeetPairing {
+  static InviteRequest = InviteRequest
+  static InviteResponse = InviteResponse
 
-    this._requestsByDKey = new BufferMap()
+  constructor () {
+    this._requestsByInviteId = new BufferMap()
     this._joinedKeysByDKey = new BufferMap()
   }
 
-  async handleRequest (request) {
+  handleRequest (request) {
     const req = PairingRequest.from(request)
 
-    const info = this._joinedKeysByDKey.get(req.discoveryKey)
-    if (!info) return
+    const key = this._joinedKeysByDKey.get(req.discoveryKey)
+    if (!key) return
 
-    req.key = info.key
-    await info.onrequest(req)
+    req.key = key
 
     return req
   }
 
   handleResponse (res) {
-    const req = this._requestsByDKey.get(res.discoveryKey)
+    const req = this._requestsByInviteId.get(res.id)
     if (!req) return
 
     req._handleResponse(res.payload)
   }
 
-  join (key, onrequest) {
+  join (key) {
     const discoveryKey = crypto.discoveryKey(key)
     if (this._joinedKeysByDKey.has(discoveryKey)) throw new Error('Key is already joined')
 
-    this._joinedKeysByDKey.set(discoveryKey, { key, onrequest })
+    this._joinedKeysByDKey.set(discoveryKey, key)
   }
 
   leave (key) {
@@ -185,7 +187,7 @@ class KeetPairing extends EventEmitter {
   pair (raw, { userData }) {
     const invite = KeetPairing.decodeInvite(raw)
 
-    let request = this._requestsByDKey.get(invite.discoveryKey)
+    let request = this._requestsByInviteId.get(invite.id)
     if (!request) {
       request = new ClientRequest(
         invite.discoveryKey,
@@ -193,10 +195,10 @@ class KeetPairing extends EventEmitter {
         userData
       )
 
-      this._requestsByDKey.set(request.discoveryKey, request)
+      this._requestsByInviteId.set(request.id, request)
 
       request.once('destroyed', () => {
-        this._requestsByDKey.delete(request.discoveryKey)
+        this._requestsByInviteId.delete(request.id)
       })
     }
 
@@ -204,7 +206,7 @@ class KeetPairing extends EventEmitter {
   }
 
   * requests () {
-    yield * this._requestsByDKey.values()
+    yield * this._requestsByInviteId.values()
   }
 
   static createInvite (key) {

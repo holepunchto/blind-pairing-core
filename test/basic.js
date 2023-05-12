@@ -16,17 +16,7 @@ test('basic valid pairing', async t => {
 
   const { id, invite, publicKey } = KeetPairing.createInvite(key)
 
-  pair1.join(key, req => {
-    t.alike(req.key, key)
-    t.alike(req.id, id)
-
-    const userData = req.open(publicKey)
-    t.alike(userData, b4a.from('hello world'))
-
-    t.alike(KeetPairing.openRequest(req.receipt, publicKey), userData)
-
-    req.confirm()
-  })
+  pair1.join(key)
 
   const req = pair2.pair(invite, { userData: b4a.from('hello world') })
   t.alike(req.id, id)
@@ -34,6 +24,15 @@ test('basic valid pairing', async t => {
   const replied = once(req, 'accepted')
 
   const res = await pair1.handleRequest(req)
+  t.alike(res.key, key)
+  t.alike(res.id, id)
+
+  const userData = res.open(publicKey)
+  t.alike(userData, b4a.from('hello world'))
+
+  t.alike(KeetPairing.openRequest(res.receipt, publicKey), userData)
+
+  res.confirm()
 
   pair2.handleResponse(res.response)
   const [reply] = await replied
@@ -49,21 +48,21 @@ test('basic invalid pairing', async t => {
 
   const { invite, publicKey } = KeetPairing.createInvite(key)
 
-  pair1.join(key, req => {
-    const userData = req.open(publicKey)
-
-    if (userData) t.fail()
-    else t.pass()
-
-    req.deny()
-  })
+  pair1.join(key)
 
   const decoded = KeetPairing.decodeInvite(invite)
   decoded.seed = b4a.allocUnsafe(32).fill(1)
   const badInvite = c.encode(Invite, decoded)
 
   const req = pair2.pair(badInvite, { userData: b4a.from('hello world') })
+
   const res = await pair1.handleRequest(req)
+  const userData = res.open(publicKey)
+
+  if (userData) t.fail()
+  else t.pass()
+
+  res.deny()
 
   const rejected = once(req, 'rejected')
 
@@ -81,20 +80,20 @@ test('basic async confirmation', async t => {
 
   const { invite, publicKey } = KeetPairing.createInvite(key)
 
-  pair1.join(key, req => {
-    t.alike(req.key, key)
-
-    const userData = req.open(publicKey)
-    t.alike(userData, b4a.from('hello world'))
-
-    setTimeout(() => {
-      req.confirm()
-      pair2.handleResponse(res.response)
-    }, 100)
-  })
+  pair1.join(key)
 
   const req = pair2.pair(invite, { userData: b4a.from('hello world') })
   const res = await pair1.handleRequest(req)
+
+  t.alike(res.key, key)
+
+  const userData = res.open(publicKey)
+  t.alike(userData, b4a.from('hello world'))
+
+  setTimeout(() => {
+    res.confirm()
+    pair2.handleResponse(res.response)
+  }, 100)
 
   const [reply] = await once(req, 'accepted')
 
@@ -114,58 +113,50 @@ test('does not leak invitee key to unproven inviters', async t => {
 
   const req = pair1.pair(invite, { userData: b4a.from('hello world') })
 
-  pair2._joinedKeysByDKey.set(req.discoveryKey, {
-    key: badKey,
-    onrequest (req) {
-      t.alike(req.open(badKey), null)
-    }
-  })
+  pair2._joinedKeysByDKey.set(req.discoveryKey, badKey)
 
-  pair2.handleRequest(req)
+  const res = pair2.handleRequest(req)
+  res.open(badKey)
+
+  t.alike(res.userData, null)
 })
 
 test('invite response is static', async t => {
-  t.plan(5)
+  t.plan(7)
 
   const key = b4a.allocUnsafe(32).fill(1)
 
   const invite = KeetPairing.createInvite(key)
   const invite2 = KeetPairing.createInvite(key)
 
+  t.unlike(invite, invite2)
+
   const p1 = new KeetPairing()
   const p2 = new KeetPairing()
   const p3 = new KeetPairing()
 
-  let payload = null
-
-  const onrequest = req => {
-    if (!payload) {
-      payload = req.payload
-      req.open(invite.publicKey)
-    } else if (b4a.compare(req.id, invite.id)) {
-      t.unlike(payload, req.payload)
-      req.open(invite2.publicKey)
-    } else {
-      t.alike(payload, req.payload)
-      req.open(invite.publicKey)
-    }
-
-    try {
-      req.confirm()
-    } catch (e) {
-      req.deny()
-    }
-  }
-
-  p1.join(key, onrequest)
+  p1.join(key)
 
   const req1 = p2.pair(invite.invite, { userData: b4a.from('hello world') })
   const req2 = p3.pair(invite.invite, { userData: b4a.from('hello world') })
   const req3 = p3.pair(invite2.invite, { userData: b4a.from('hello world') })
 
+  t.unlike(req2.seed, req3.seed)
+
   const res1 = await p1.handleRequest(req1)
   const res2 = await p1.handleRequest(req2)
   const res3 = await p1.handleRequest(req3)
+
+  res1.open(invite.publicKey)
+  res2.open(invite.publicKey)
+  res3.open(invite2.publicKey)
+
+  t.alike(res2.payload, res1.payload)
+  t.unlike(res3.payload, res1.payload)
+
+  res1.confirm()
+  res2.confirm()
+  res3.confirm()
 
   const promise1 = new Promise(resolve => req1.on('accepted', resolve))
   const promise2 = new Promise(resolve => req2.on('accepted', resolve))
