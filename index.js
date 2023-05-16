@@ -37,13 +37,21 @@ class ClientRequest extends EventEmitter {
     this.payload = createAuth(this.userData, this.token, this.keyPair)
 
     this.key = null
+
+    // set by relay
+    this._relaySeq = null
   }
 
-  _handleResponse (payload) {
+  handleResponse (payload) {
     try {
       this._openResponse(payload)
     } catch (err) {
-      return this.emit('rejected', err)
+      try {
+        const data = this._decodeResponse(payload)
+        return this.handleResponse(data)
+      } catch {
+        return this.emit('rejected', err)
+      }
     }
 
     this._onAccept()
@@ -65,6 +73,19 @@ class ClientRequest extends EventEmitter {
   _onAccept () {
     this.emit('accepted', this.key)
     this.destroy()
+  }
+
+  _decodeResponse (buf) {
+    try {
+      const { payload } = c.decode(InviteResponse, buf)
+      return payload
+    } catch {
+      throw new Error('Could not decode response.')
+    }
+  }
+
+  encode () {
+    return c.encode(InviteRequest, this)
   }
 
   destroy () {
@@ -121,11 +142,11 @@ class PairingRequest {
   }
 
   _respond () {
-    this.response = {
+    this.response = c.encode(InviteResponse, {
       discoveryKey: this.discoveryKey,
       id: this.id,
       payload: this._confirmed ? this.reply : null
-    }
+    })
   }
 
   open (publicKey) {
@@ -168,10 +189,14 @@ class KeetPairing {
   }
 
   handleResponse (res) {
+    if (b4a.isBuffer(res)) {
+      return this.handleResponse(c.decode(InviteResponse, res))
+    }
+
     const req = this._requestsByInviteId.get(res.id)
     if (!req) return
 
-    req._handleResponse(res.payload)
+    req.handleResponse(res.payload)
   }
 
   join (key) {
@@ -223,6 +248,11 @@ class KeetPairing {
     } catch {
       throw new Error('Invalid invitation')
     }
+  }
+
+  static createRequest (invite, userData) {
+    if (b4a.isBuffer(invite)) invite = KeetPairing.decodeInvite(invite)
+    return new ClientRequest(invite.discoveryKey, invite.seed, userData)
   }
 
   static openRequest (request, publicKey) {
