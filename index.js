@@ -10,6 +10,7 @@ const {
   InvitePayload,
   InviteRequest,
   InviteResponse,
+  PersistedRequest,
   InviteData,
   AuthData
 } = require('./lib/messages')
@@ -22,7 +23,7 @@ const [
   NS_NONCE
 ] = crypto.namespace('keet-pairing', 5)
 
-class ClientRequest extends EventEmitter {
+class PairingRequest extends EventEmitter {
   constructor (discoveryKey, seed, userData) {
     super()
 
@@ -41,6 +42,8 @@ class ClientRequest extends EventEmitter {
     // set by relay
     this._relaySeq = null
   }
+
+  static encoding = PersistedRequest
 
   handleResponse (payload) {
     try {
@@ -84,19 +87,38 @@ class ClientRequest extends EventEmitter {
     }
   }
 
-  encode () {
-    return c.encode(InviteRequest, this)
-  }
-
   destroy () {
     this.token = null
     this.payload = null
 
     this.emit('destroyed')
   }
+
+  encode () {
+    return c.encode(InviteRequest, this)
+  }
+
+  persist () {
+    return c.encode(PairingRequest.encoding, this)
+  }
+
+  static from (buf) {
+    const info = c.decode(PairingRequest.encoding, buf)
+    const { seed, discoveryKey, userData } = info
+    const request = new PairingRequest(discoveryKey, seed, userData)
+
+    // clear completed request
+    if (info.key) {
+      request.key = info.key
+      request.token = null
+      request.payload = null
+    }
+
+    return request
+  }
 }
 
-class PairingRequest {
+class IncomingRequest {
   constructor (discoveryKey, inviteId, payload) {
     this.discoveryKey = discoveryKey
     this.id = inviteId
@@ -117,10 +139,10 @@ class PairingRequest {
 
   static from (req) {
     if (b4a.isBuffer(req)) {
-      return PairingRequest.from(c.decode(InviteRequest, req))
+      return IncomingRequest.from(c.decode(InviteRequest, req))
     }
 
-    return new PairingRequest(
+    return new IncomingRequest(
       req.discoveryKey,
       req.id,
       req.payload
@@ -141,12 +163,16 @@ class PairingRequest {
     this._respond()
   }
 
-  _respond () {
-    this.response = c.encode(InviteResponse, {
+  respond () {
+    return {
       discoveryKey: this.discoveryKey,
       id: this.id,
       payload: this._confirmed ? this.reply : null
-    })
+    }
+  }
+
+  _respond () {
+    this.response = c.encode(InviteResponse, this.respond())
   }
 
   open (publicKey) {
@@ -178,7 +204,7 @@ class KeetPairing {
   }
 
   handleRequest (request) {
-    const req = PairingRequest.from(request)
+    const req = IncomingRequest.from(request)
 
     const key = this._joinedKeysByDKey.get(req.discoveryKey)
     if (!key) return
@@ -214,22 +240,37 @@ class KeetPairing {
   }
 
   pair (raw, { userData }) {
+    if (raw instanceof PairingRequest) {
+      return this.add(raw)
+    }
+
     const invite = KeetPairing.decodeInvite(raw)
 
-    let request = this._requestsByInviteId.get(invite.id)
-    if (!request) {
-      request = new ClientRequest(
-        invite.discoveryKey,
-        invite.seed,
-        userData
-      )
-
-      this._requestsByInviteId.set(request.id, request)
-
-      request.once('destroyed', () => {
-        this._requestsByInviteId.delete(request.id)
-      })
+    if (this._requestsByInviteId.has(invite.id)) {
+      return this._requestsByInviteId.get(invite.id)
     }
+
+    const request = new PairingRequest(
+      invite.discoveryKey,
+      invite.seed,
+      userData
+    )
+
+    return this.add(request)
+  }
+
+  add (request) {
+    if (b4a.isBuffer(request)) {
+      return this.add(PairingRequest.from(request))
+    }
+
+    // check for duplicate request same id?
+    if (this._requestsByInviteId.has(request.id)) return
+
+    this._requestsByInviteId.set(request.id, request)
+    request.once('destroyed', () => {
+      this._requestsByInviteId.delete(request.id)
+    })
 
     return request
   }
@@ -252,7 +293,7 @@ class KeetPairing {
 
   static createRequest (invite, userData) {
     if (b4a.isBuffer(invite)) invite = KeetPairing.decodeInvite(invite)
-    return new ClientRequest(invite.discoveryKey, invite.seed, userData)
+    return new PairingRequest(invite.discoveryKey, invite.seed, userData)
   }
 
   static openRequest (request, publicKey) {
@@ -267,6 +308,7 @@ class KeetPairing {
   }
 }
 
+module.exports.PairingRequest = PairingRequest
 module.exports.KeetPairing = KeetPairing
 
 function hash (ns, buf, len = 32) {
