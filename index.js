@@ -1,5 +1,4 @@
 const { EventEmitter } = require('events')
-const BufferMap = require('tiny-buffer-map')
 const sodium = require('sodium-universal')
 const crypto = require('hypercore-crypto')
 const b4a = require('b4a')
@@ -23,18 +22,22 @@ const [
   NS_NONCE
 ] = crypto.namespace('keet-pairing', 5)
 
-class PairingRequest extends EventEmitter {
-  constructor (discoveryKey, seed, userData) {
+class CandidateRequest extends EventEmitter {
+  constructor (invite, userData) {
     super()
 
-    this.discoveryKey = discoveryKey
-    this.seed = seed
+    if (b4a.isBuffer(invite)) {
+      invite = c.decode(Invite, invite)
+    }
 
-    this.keyPair = getKeyPair(seed)
-    this.userData = userData || null
+    this.discoveryKey = invite.discoveryKey
+    this.seed = invite.seed
+
+    this.keyPair = getKeyPair(this.seed)
+    this.userData = userData
     this.id = inviteId(this.keyPair.publicKey)
 
-    this.token = createToken(seed, userData)
+    this.token = createToken(this.seed, userData)
     this.payload = createAuth(this.userData, this.token, this.keyPair)
 
     this.key = null
@@ -99,13 +102,13 @@ class PairingRequest extends EventEmitter {
   }
 
   persist () {
-    return c.encode(PairingRequest.encoding, this)
+    return c.encode(CandidateRequest.encoding, this)
   }
 
   static from (buf) {
-    const info = c.decode(PairingRequest.encoding, buf)
+    const info = c.decode(CandidateRequest.encoding, buf)
     const { seed, discoveryKey, userData } = info
-    const request = new PairingRequest(discoveryKey, seed, userData)
+    const request = new CandidateRequest({ discoveryKey, seed }, userData)
 
     // clear completed request
     if (info.key) {
@@ -118,40 +121,43 @@ class PairingRequest extends EventEmitter {
   }
 }
 
-class IncomingRequest {
-  constructor (discoveryKey, inviteId, payload) {
+class MemberRequest {
+  constructor (discoveryKey, inviteId, requestData) {
     this.discoveryKey = discoveryKey
     this.id = inviteId
-    this.payload = payload
+    this.requestData = requestData
 
-    this.key = null
     this._confirmed = false
     this._denied = false
 
     // set in open
+    this.publicKey = null
     this.userData = null
     this.token = null
     this.receipt = null
 
-    this.reply = null
+    // set in confirm/respond
+    this.payload = null
     this.response = null
   }
 
   static from (req) {
     if (b4a.isBuffer(req)) {
-      return IncomingRequest.from(c.decode(InviteRequest, req))
+      return MemberRequest.from(c.decode(InviteRequest, req))
     }
 
-    return new IncomingRequest(
+    return new MemberRequest(
       req.discoveryKey,
       req.id,
       req.payload
     )
   }
 
-  confirm () {
+  confirm (payload) {
     if (this._confirmed || this._denied) return
     this._confirmed = true
+
+    this.payload = createReply(payload, this.token, this.publicKey)
 
     this._respond()
   }
@@ -167,7 +173,7 @@ class IncomingRequest {
     return {
       discoveryKey: this.discoveryKey,
       id: this.id,
-      payload: this._confirmed ? this.reply : null
+      payload: this._confirmed ? this.payload : null
     }
   }
 
@@ -176,10 +182,10 @@ class IncomingRequest {
   }
 
   open (publicKey) {
-    const payload = this.payload
+    const requestData = this.requestData
 
     try {
-      const { userData, token } = openAuth(payload, publicKey)
+      const { userData, token } = openAuth(requestData, publicKey)
       this.userData = userData
       this.token = token
     } catch (e) {
@@ -187,129 +193,16 @@ class IncomingRequest {
       return null
     }
 
-    this.receipt = c.encode(InvitePayload, payload)
-    this.reply = createReply(this.key, this.token, publicKey)
+    this.publicKey = publicKey
+    this.receipt = c.encode(InvitePayload, requestData)
 
     return this.userData
   }
 }
 
-class KeetPairing {
-  static InviteRequest = InviteRequest
-  static InviteResponse = InviteResponse
-
-  constructor () {
-    this._requestsByInviteId = new BufferMap()
-    this._joinedKeysByDKey = new BufferMap()
-  }
-
-  handleRequest (request) {
-    const req = IncomingRequest.from(request)
-
-    const key = this._joinedKeysByDKey.get(req.discoveryKey)
-    if (!key) return
-
-    req.key = key
-
-    return req
-  }
-
-  handleResponse (res) {
-    if (b4a.isBuffer(res)) {
-      return this.handleResponse(c.decode(InviteResponse, res))
-    }
-
-    const req = this._requestsByInviteId.get(res.id)
-    if (!req) return
-
-    req.handleResponse(res.payload)
-  }
-
-  join (key) {
-    const discoveryKey = crypto.discoveryKey(key)
-    if (this._joinedKeysByDKey.has(discoveryKey)) throw new Error('Key is already joined')
-
-    this._joinedKeysByDKey.set(discoveryKey, key)
-  }
-
-  leave (key) {
-    const discoveryKey = crypto.discoveryKey(key)
-    if (!this._joinedKeysByDKey.has(discoveryKey)) throw new Error('Key is not joined')
-
-    this._joinedKeysByDKey.delete(discoveryKey)
-  }
-
-  pair (raw, { userData }) {
-    if (raw instanceof PairingRequest) {
-      return this.add(raw)
-    }
-
-    const invite = KeetPairing.decodeInvite(raw)
-
-    if (this._requestsByInviteId.has(invite.id)) {
-      return this._requestsByInviteId.get(invite.id)
-    }
-
-    const request = new PairingRequest(
-      invite.discoveryKey,
-      invite.seed,
-      userData
-    )
-
-    return this.add(request)
-  }
-
-  add (request) {
-    if (b4a.isBuffer(request)) {
-      return this.add(PairingRequest.from(request))
-    }
-
-    // check for duplicate request same id?
-    if (this._requestsByInviteId.has(request.id)) return
-
-    this._requestsByInviteId.set(request.id, request)
-    request.once('destroyed', () => {
-      this._requestsByInviteId.delete(request.id)
-    })
-
-    return request
-  }
-
-  * requests () {
-    yield * this._requestsByInviteId.values()
-  }
-
-  static createInvite (key) {
-    return createInvite(key)
-  }
-
-  static decodeInvite (raw) {
-    try {
-      return c.decode(Invite, raw)
-    } catch {
-      throw new Error('Invalid invitation')
-    }
-  }
-
-  static createRequest (invite, userData) {
-    if (b4a.isBuffer(invite)) invite = KeetPairing.decodeInvite(invite)
-    return new PairingRequest(invite.discoveryKey, invite.seed, userData)
-  }
-
-  static openRequest (request, publicKey) {
-    const payload = c.decode(InvitePayload, request)
-    try {
-      const { userData } = openAuth(payload, publicKey)
-      return userData
-    } catch (e) {
-      // todo: log error
-      return null
-    }
-  }
-}
-
-module.exports.PairingRequest = PairingRequest
-module.exports.KeetPairing = KeetPairing
+module.exports.CandidateRequest = CandidateRequest
+module.exports.MemberRequest = MemberRequest
+module.exports.createInvite = createInvite
 
 function hash (ns, buf, len = 32) {
   const out = b4a.allocUnsafe(len)
