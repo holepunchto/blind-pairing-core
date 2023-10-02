@@ -189,8 +189,7 @@ class MemberRequest {
       this.userData = userData
       this.token = token
     } catch (e) {
-      // todo: log error
-      return null
+      throw new Error('Failed to open invite with provided key')
     }
 
     this.publicKey = publicKey

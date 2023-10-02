@@ -46,10 +46,9 @@ test('basic invalid pairing', async t => {
   const candidate = new CandidateRequest(badInvite, b4a.from('hello world'))
 
   const member = MemberRequest.from(candidate.encode())
-  const userData = member.open(publicKey)
+  t.exception(() => member.open(publicKey))
 
-  if (userData) t.fail()
-  else t.pass()
+  if (member.userData) t.fail()
 
   member.deny()
 
@@ -60,7 +59,7 @@ test('basic invalid pairing', async t => {
 })
 
 test('does not leak invitee key to unproven inviters', async t => {
-  t.plan(1)
+  t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
   const { invite } = createInvite(key)
@@ -70,7 +69,7 @@ test('does not leak invitee key to unproven inviters', async t => {
   const req = new CandidateRequest(invite, b4a.from('hello world'))
 
   const res = MemberRequest.from(req.encode())
-  res.open(badKey)
+  t.exception(() => res.open(badKey))
 
   t.alike(res.userData, null)
 })
