@@ -56,11 +56,13 @@ class CandidateRequest extends EventEmitter {
         const data = this._decodeResponse(payload)
         return this.handleResponse(data)
       } catch {
-        return this.emit('rejected', err)
+        this.emit('rejected', err)
+        return null
       }
     }
 
     this._onAccept()
+    return this.key
   }
 
   _openResponse (payload) {
@@ -165,8 +167,6 @@ class MemberRequest {
   deny () {
     if (this._confirmed || this._denied) return
     this._denied = true
-
-    this._respond()
   }
 
   respond () {
