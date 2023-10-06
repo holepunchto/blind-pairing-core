@@ -6,7 +6,8 @@ const c = require('compact-encoding')
 
 const {
   Invite,
-  InvitePayload,
+  RequestPayload,
+  ResponsePayload,
   InviteRequest,
   InviteResponse,
   PersistedRequest,
@@ -40,7 +41,7 @@ class CandidateRequest extends EventEmitter {
     this.token = createToken(this.seed, userData)
     this.payload = createAuth(this.userData, this.token, this.keyPair)
 
-    this.key = null
+    this.auth = null
 
     // set by relay
     this._relaySeq = null
@@ -67,19 +68,20 @@ class CandidateRequest extends EventEmitter {
 
   _openResponse (payload) {
     try {
-      this.key = openReply(payload, this.token, this.keyPair.publicKey)
+      const response = openReply(payload, this.token, this.keyPair.publicKey)
+      this.auth = c.decode(ResponsePayload, response)
     } catch {
       throw new Error('Could not decrypt reply.')
     }
 
-    if (b4a.compare(crypto.discoveryKey(this.key), this.discoveryKey)) {
-      this.key = null
+    if (b4a.compare(crypto.discoveryKey(this.auth.key), this.discoveryKey)) {
+      this.auth = null
       throw new Error('Invite response does not match discoveryKey')
     }
   }
 
   _onAccept () {
-    this.emit('accepted', this.key)
+    this.emit('accepted', this.auth)
     this.destroy()
   }
 
@@ -139,7 +141,7 @@ class MemberRequest {
     this.receipt = null
 
     // set in confirm/respond
-    this.payload = null
+    this._payload = null
     this.response = null
   }
 
@@ -155,11 +157,12 @@ class MemberRequest {
     )
   }
 
-  confirm (payload) {
+  confirm (response) {
     if (this._confirmed || this._denied) return
     this._confirmed = true
 
-    this.payload = createReply(payload, this.token, this.publicKey)
+    const payload = c.encode(ResponsePayload, response)
+    this._payload = createReply(payload, this.token, this.publicKey)
 
     this._respond()
   }
@@ -173,7 +176,7 @@ class MemberRequest {
     return {
       discoveryKey: this.discoveryKey,
       id: this.id,
-      payload: this._confirmed ? this.payload : null
+      payload: this._confirmed ? this._payload : null
     }
   }
 
@@ -193,7 +196,7 @@ class MemberRequest {
     }
 
     this.publicKey = publicKey
-    this.receipt = c.encode(InvitePayload, requestData)
+    this.receipt = c.encode(RequestPayload, requestData)
 
     return this.userData
   }

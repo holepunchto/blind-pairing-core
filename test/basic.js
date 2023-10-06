@@ -26,36 +26,41 @@ test('basic valid pairing', async t => {
   const userData = member.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
-  member.confirm(key)
+  member.confirm({ key })
 
   candidate.handleResponse(member.response)
   const [reply] = await replied
 
-  t.alike(reply, key)
+  t.alike(reply.key, key)
 })
 
-test('basic invalid pairing', async t => {
+test('basic valid pairing with encryption key', async t => {
+  t.plan(4)
+
   const key = b4a.allocUnsafe(32).fill(1)
+  const encryptionKey = b4a.allocUnsafe(32).fill(2)
 
-  const { invite, publicKey } = createInvite(key)
+  const { id, invite, publicKey } = createInvite(key)
 
-  const decoded = c.decode(Invite, invite)
-  decoded.seed = b4a.allocUnsafe(32).fill(1)
-  const badInvite = c.encode(Invite, decoded)
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'))
 
-  const candidate = new CandidateRequest(badInvite, b4a.from('hello world'))
+  t.alike(candidate.id, id)
+
+  const replied = once(candidate, 'accepted')
 
   const member = MemberRequest.from(candidate.encode())
-  t.exception(() => member.open(publicKey))
 
-  if (member.userData) t.fail()
+  t.alike(member.id, id)
 
-  member.deny()
+  const userData = member.open(publicKey)
+  t.alike(userData, b4a.from('hello world'))
 
-  const rejected = once(candidate, 'rejected')
+  member.confirm({ key, encryptionKey })
 
   candidate.handleResponse(member.response)
-  await t.execution(rejected)
+  const [reply] = await replied
+
+  t.alike(reply, { key, encryptionKey })
 })
 
 test('does not leak invitee key to unproven inviters', async t => {
@@ -78,6 +83,7 @@ test('invite response is static', async t => {
   t.plan(9)
 
   const key = b4a.allocUnsafe(32).fill(1)
+  const encryptionKey = b4a.allocUnsafe(32).fill(2)
 
   const invite = createInvite(key)
   const invite2 = createInvite(key)
@@ -101,9 +107,9 @@ test('invite response is static', async t => {
   t.unlike(res2.receipt, res1.receipt)
   t.unlike(res3.receipt, res1.receipt)
 
-  res1.confirm(key)
-  res2.confirm(key)
-  res3.confirm(key)
+  res1.confirm({ key, encryptionKey })
+  res2.confirm({ key, encryptionKey })
+  res3.confirm({ key, encryptionKey })
 
   t.unlike(res2.response, res1.response)
   t.unlike(res3.response, res1.response)
@@ -116,9 +122,9 @@ test('invite response is static', async t => {
   req2.handleResponse(res2.response)
   req3.handleResponse(res3.response)
 
-  t.alike(await promise1, key)
-  t.alike(await promise2, key)
-  t.alike(await promise3, key)
+  t.alike(await promise1, { key, encryptionKey })
+  t.alike(await promise2, { key, encryptionKey })
+  t.alike(await promise3, { key, encryptionKey })
 })
 
 test('using a request - payload', async t => {
@@ -134,13 +140,13 @@ test('using a request - payload', async t => {
   const userData = res.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
-  res.confirm(key)
+  res.confirm({ key })
 
   const accept = once(req, 'accepted')
   req.handleResponse(res.respond().payload)
 
   const [reply] = await accept
-  t.alike(reply, key)
+  t.alike(reply.key, key)
 })
 
 test('using a request - response', async t => {
@@ -156,13 +162,13 @@ test('using a request - response', async t => {
   const userData = res.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
-  res.confirm(key)
+  res.confirm({ key })
 
   const accept = once(req, 'accepted')
   req.handleResponse(res.response)
 
   const [reply] = await accept
-  t.alike(reply, key)
+  t.alike(reply.key, key)
 })
 
 test('restoring a request', async t => {
@@ -180,7 +186,7 @@ test('restoring a request', async t => {
   const userData = res.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
-  res.confirm(key)
+  res.confirm({ key })
 
   const req2 = CandidateRequest.from(stored)
 
@@ -190,5 +196,5 @@ test('restoring a request', async t => {
   req2.handleResponse(res.response)
 
   const [reply] = await accept
-  t.alike(reply, key)
+  t.alike(reply.key, key)
 })
