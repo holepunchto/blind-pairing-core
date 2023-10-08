@@ -4,250 +4,191 @@ const b4a = require('b4a')
 const c = require('compact-encoding')
 
 const { Invite } = require('../lib/messages')
-const { PairingRequest, KeetPairing } = require('..')
+const { CandidateRequest, MemberRequest, createInvite } = require('..')
 
 test('basic valid pairing', async t => {
-  t.plan(6)
+  t.plan(4)
 
   const key = b4a.allocUnsafe(32).fill(1)
 
-  const pair1 = new KeetPairing()
-  const pair2 = new KeetPairing()
+  const { id, invite, publicKey } = createInvite(key)
 
-  const { id, invite, publicKey } = KeetPairing.createInvite(key)
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'))
 
-  pair1.join(key)
+  t.alike(candidate.id, id)
 
-  const req = pair2.pair(invite, { userData: b4a.from('hello world') })
-  t.alike(req.id, id)
+  const replied = once(candidate, 'accepted')
 
-  const replied = once(req, 'accepted')
+  const member = MemberRequest.from(candidate.encode())
 
-  const res = await pair1.handleRequest(req)
-  t.alike(res.key, key)
-  t.alike(res.id, id)
+  t.alike(member.id, id)
 
-  const userData = res.open(publicKey)
+  const userData = member.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
-  t.alike(KeetPairing.openRequest(res.receipt, publicKey), userData)
+  member.confirm({ key })
 
-  res.confirm()
-
-  pair2.handleResponse(res.response)
+  candidate.handleResponse(member.response)
   const [reply] = await replied
 
-  t.alike(reply, key)
+  t.alike(reply.key, key)
 })
 
-test('basic invalid pairing', async t => {
-  const key = b4a.allocUnsafe(32).fill(1)
-
-  const pair1 = new KeetPairing()
-  const pair2 = new KeetPairing()
-
-  const { invite, publicKey } = KeetPairing.createInvite(key)
-
-  pair1.join(key)
-
-  const decoded = KeetPairing.decodeInvite(invite)
-  decoded.seed = b4a.allocUnsafe(32).fill(1)
-  const badInvite = c.encode(Invite, decoded)
-
-  const req = pair2.pair(badInvite, { userData: b4a.from('hello world') })
-
-  const res = await pair1.handleRequest(req)
-  const userData = res.open(publicKey)
-
-  if (userData) t.fail()
-  else t.pass()
-
-  res.deny()
-
-  const rejected = once(req, 'rejected')
-
-  pair2.handleResponse(res.response)
-  await rejected
-})
-
-test('basic async confirmation', async t => {
-  t.plan(3)
+test('basic valid pairing with encryption key', async t => {
+  t.plan(4)
 
   const key = b4a.allocUnsafe(32).fill(1)
+  const encryptionKey = b4a.allocUnsafe(32).fill(2)
 
-  const pair1 = new KeetPairing()
-  const pair2 = new KeetPairing()
+  const { id, invite, publicKey } = createInvite(key)
 
-  const { invite, publicKey } = KeetPairing.createInvite(key)
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'))
 
-  pair1.join(key)
+  t.alike(candidate.id, id)
 
-  const req = pair2.pair(invite, { userData: b4a.from('hello world') })
-  const res = await pair1.handleRequest(req)
+  const replied = once(candidate, 'accepted')
 
-  t.alike(res.key, key)
+  const member = MemberRequest.from(candidate.encode())
 
-  const userData = res.open(publicKey)
+  t.alike(member.id, id)
+
+  const userData = member.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
-  setTimeout(() => {
-    res.confirm()
-    pair2.handleResponse(res.response)
-  }, 100)
+  member.confirm({ key, encryptionKey })
 
-  const [reply] = await once(req, 'accepted')
+  candidate.handleResponse(member.response)
+  const [reply] = await replied
 
-  t.alike(reply, key)
+  t.alike(reply, { key, encryptionKey })
 })
 
 test('does not leak invitee key to unproven inviters', async t => {
-  t.plan(1)
+  t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
-  const { invite } = KeetPairing.createInvite(key)
+  const { invite } = createInvite(key)
 
   const badKey = b4a.allocUnsafe(32).fill(2)
 
-  const pair1 = new KeetPairing()
-  const pair2 = new KeetPairing()
+  const req = new CandidateRequest(invite, b4a.from('hello world'))
 
-  const req = pair1.pair(invite, { userData: b4a.from('hello world') })
-
-  pair2._joinedKeysByDKey.set(req.discoveryKey, badKey)
-
-  const res = pair2.handleRequest(req)
-  res.open(badKey)
+  const res = MemberRequest.from(req.encode())
+  t.exception(() => res.open(badKey))
 
   t.alike(res.userData, null)
 })
 
 test('invite response is static', async t => {
-  t.plan(7)
+  t.plan(9)
 
   const key = b4a.allocUnsafe(32).fill(1)
+  const encryptionKey = b4a.allocUnsafe(32).fill(2)
 
-  const invite = KeetPairing.createInvite(key)
-  const invite2 = KeetPairing.createInvite(key)
+  const invite = createInvite(key)
+  const invite2 = createInvite(key)
 
   t.unlike(invite, invite2)
 
-  const p1 = new KeetPairing()
-  const p2 = new KeetPairing()
-  const p3 = new KeetPairing()
-
-  p1.join(key)
-
-  const req1 = p2.pair(invite.invite, { userData: b4a.from('hello world') })
-  const req2 = p3.pair(invite.invite, { userData: b4a.from('hello world') })
-  const req3 = p3.pair(invite2.invite, { userData: b4a.from('hello world') })
+  const req1 = new CandidateRequest(invite.invite, b4a.from('hello world'))
+  const req2 = new CandidateRequest(invite.invite, b4a.from('different'))
+  const req3 = new CandidateRequest(invite2.invite, b4a.from('hello world'))
 
   t.unlike(req2.seed, req3.seed)
 
-  const res1 = await p1.handleRequest(req1)
-  const res2 = await p1.handleRequest(req2)
-  const res3 = await p1.handleRequest(req3)
+  const res1 = MemberRequest.from(req1)
+  const res2 = MemberRequest.from(req2)
+  const res3 = MemberRequest.from(req3)
 
   res1.open(invite.publicKey)
   res2.open(invite.publicKey)
   res3.open(invite2.publicKey)
 
-  t.alike(res2.payload, res1.payload)
-  t.unlike(res3.payload, res1.payload)
+  t.unlike(res2.receipt, res1.receipt)
+  t.unlike(res3.receipt, res1.receipt)
 
-  res1.confirm()
-  res2.confirm()
-  res3.confirm()
+  res1.confirm({ key, encryptionKey })
+  res2.confirm({ key, encryptionKey })
+  res3.confirm({ key, encryptionKey })
+
+  t.unlike(res2.response, res1.response)
+  t.unlike(res3.response, res1.response)
 
   const promise1 = new Promise(resolve => req1.on('accepted', resolve))
   const promise2 = new Promise(resolve => req2.on('accepted', resolve))
   const promise3 = new Promise(resolve => req3.on('accepted', resolve))
 
-  p2.handleResponse(res1.response)
-  p3.handleResponse(res2.response)
-  p3.handleResponse(res3.response)
+  req1.handleResponse(res1.response)
+  req2.handleResponse(res2.response)
+  req3.handleResponse(res3.response)
 
-  t.alike(await promise1, key)
-  t.alike(await promise2, key)
-  t.alike(await promise3, key)
+  t.alike(await promise1, { key, encryptionKey })
+  t.alike(await promise2, { key, encryptionKey })
+  t.alike(await promise3, { key, encryptionKey })
 })
 
 test('using a request - payload', async t => {
-  t.plan(3)
+  t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
 
-  const pair = new KeetPairing()
-  pair.join(key)
+  const { invite, publicKey } = createInvite(key)
 
-  const { invite, publicKey } = KeetPairing.createInvite(key)
-
-  const req = KeetPairing.createRequest(invite, b4a.from('hello world'))
-  const res = await pair.handleRequest(req)
-
-  t.alike(res.key, key)
+  const req = new CandidateRequest(invite, b4a.from('hello world'))
+  const res = MemberRequest.from(req.encode())
 
   const userData = res.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
-  res.confirm()
+  res.confirm({ key })
 
   const accept = once(req, 'accepted')
   req.handleResponse(res.respond().payload)
 
   const [reply] = await accept
-  t.alike(reply, key)
+  t.alike(reply.key, key)
 })
 
 test('using a request - response', async t => {
-  t.plan(3)
+  t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
 
-  const pair = new KeetPairing()
-  pair.join(key)
+  const { invite, publicKey } = createInvite(key)
 
-  const { invite, publicKey } = KeetPairing.createInvite(key)
-
-  const req = KeetPairing.createRequest(invite, b4a.from('hello world'))
-  const res = await pair.handleRequest(req)
-
-  t.alike(res.key, key)
+  const req = new CandidateRequest(invite, b4a.from('hello world'))
+  const res = MemberRequest.from(req.encode())
 
   const userData = res.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
-  res.confirm()
+  res.confirm({ key })
 
   const accept = once(req, 'accepted')
   req.handleResponse(res.response)
 
   const [reply] = await accept
-  t.alike(reply, key)
+  t.alike(reply.key, key)
 })
 
 test('restoring a request', async t => {
-  t.plan(3)
+  t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
 
-  const pair = new KeetPairing()
-  pair.join(key)
+  const { invite, publicKey } = createInvite(key)
 
-  const { invite, publicKey } = KeetPairing.createInvite(key)
-
-  const req = KeetPairing.createRequest(invite, b4a.from('hello world'))
+  const req = new CandidateRequest(invite, b4a.from('hello world'))
   const stored = req.persist()
 
-  const res = await pair.handleRequest(req)
-
-  t.alike(res.key, key)
+  const res = MemberRequest.from(req.encode())
 
   const userData = res.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
-  res.confirm()
+  res.confirm({ key })
 
-  const req2 = PairingRequest.from(stored)
+  const req2 = CandidateRequest.from(stored)
 
   req2.on('rejected', err => t.fail(err))
 
@@ -255,38 +196,5 @@ test('restoring a request', async t => {
   req2.handleResponse(res.response)
 
   const [reply] = await accept
-  t.alike(reply, key)
-})
-
-test('adding a stored request', async t => {
-  t.plan(3)
-
-  const key = b4a.allocUnsafe(32).fill(1)
-
-  const pair = new KeetPairing()
-  const pair2 = new KeetPairing()
-
-  pair.join(key)
-
-  const { invite, publicKey } = KeetPairing.createInvite(key)
-
-  const req = KeetPairing.createRequest(invite, b4a.from('hello world'))
-  const stored = req.persist()
-
-  const res = await pair.handleRequest(req)
-
-  t.alike(res.key, key)
-
-  const userData = res.open(publicKey)
-  t.alike(userData, b4a.from('hello world'))
-
-  res.confirm()
-
-  const req2 = pair2.add(stored)
-
-  const accept = once(req2, 'accepted')
-  pair2.handleResponse(res.response)
-
-  const [reply] = await accept
-  t.alike(reply, key)
+  t.alike(reply.key, key)
 })
