@@ -21,7 +21,7 @@ const [
   NS_TOKEN,
   NS_ENCRYPT,
   NS_NONCE
-] = crypto.namespace('keet-pairing', 5)
+] = crypto.namespace('blind-pairing', 5)
 
 class CandidateRequest extends EventEmitter {
   constructor (invite, userData) {
