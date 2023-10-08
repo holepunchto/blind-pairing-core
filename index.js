@@ -209,6 +209,8 @@ class MemberRequest {
 module.exports.CandidateRequest = CandidateRequest
 module.exports.MemberRequest = MemberRequest
 module.exports.createInvite = createInvite
+module.exports.decodeInvite = decodeInvite
+module.exports.getKeyPair = getKeyPair
 
 function hash (ns, buf, len = 32) {
   const out = b4a.allocUnsafe(len)
@@ -250,6 +252,10 @@ function createInvite (key) {
     publicKey: keyPair.publicKey,
     discoveryKey
   }
+}
+
+function decodeInvite (invite) {
+  return c.decode(Invite, invite)
 }
 
 function getKeyPair (seed) {
