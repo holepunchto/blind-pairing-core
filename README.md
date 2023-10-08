@@ -1,4 +1,4 @@
-# keet-pairing-core
+# blind-pairing-core
 
 ### Pairing Flow
 
@@ -14,7 +14,7 @@ Note that verifying an invitation cannot be done automatically in `onrequest`. Y
 ## Usage
 
 ```js
-import { KeetPairing } from 'keet-pairing-core'
+import { KeetPairing } from 'blind-pairing-core'
 
 // Inviter generates the invite
 const { invite, publicKey } = KeetPairing.createInvite(key) // key is a Hypercore or Autobase key

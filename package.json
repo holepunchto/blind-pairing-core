@@ -1,7 +1,7 @@
 {
-  "name": "keet-pairing-core",
+  "name": "@holepunchto/blind-pairing-core",
   "version": "0.0.0",
-  "description": "Core pairing module for Keet",
+  "description": "Core blind pairing module",
   "main": "index.js",
   "directories": {
     "lib": "lib",
@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/holepunchto/keet-pairing-core.git"
+    "url": "git+https://github.com/holepunchto/blind-pairing-core.git"
   },
   "author": "Holepunch",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/holepunchto/keet-pairing-core/issues"
+    "url": "https://github.com/holepunchto/blind-pairing-core/issues"
   },
-  "homepage": "https://github.com/holepunchto/keet-pairing-core#readme",
+  "homepage": "https://github.com/holepunchto/blind-pairing-core#readme",
   "dependencies": {
     "b4a": "^1.6.4",
     "compact-encoding": "^2.11.0",
