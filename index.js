@@ -131,6 +131,7 @@ class MemberRequest {
     this.id = inviteId
     this.requestData = requestData
 
+    this._opened = false
     this._confirmed = false
     this._denied = false
 
@@ -158,7 +159,7 @@ class MemberRequest {
   }
 
   confirm (response) {
-    if (this._confirmed || this._denied) return
+    if (this._confirmed || this._denied || !this._opened) return
     this._confirmed = true
 
     const payload = c.encode(ResponsePayload, response)
@@ -185,6 +186,8 @@ class MemberRequest {
   }
 
   open (publicKey) {
+    if (this._opened && b4a.equals(this.publicKey, publicKey)) return this.userData
+
     const requestData = this.requestData
 
     try {
@@ -197,6 +200,7 @@ class MemberRequest {
 
     this.publicKey = publicKey
     this.receipt = c.encode(RequestPayload, requestData)
+    this._opened = true
 
     return this.userData
   }
@@ -243,7 +247,8 @@ function createInvite (key) {
   return {
     id,
     invite: c.encode(Invite, { discoveryKey, seed }),
-    publicKey: keyPair.publicKey
+    publicKey: keyPair.publicKey,
+    discoveryKey
   }
 }
 
