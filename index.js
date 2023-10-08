@@ -63,7 +63,7 @@ class CandidateRequest extends EventEmitter {
     }
 
     this._onAccept()
-    return this.key
+    return this.auth
   }
 
   _openResponse (payload) {
