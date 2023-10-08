@@ -1,9 +1,7 @@
 const { once } = require('events')
 const test = require('brittle')
 const b4a = require('b4a')
-const c = require('compact-encoding')
 
-const { Invite } = require('../lib/messages')
 const { CandidateRequest, MemberRequest, createInvite } = require('..')
 
 test('basic valid pairing', async t => {
