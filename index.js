@@ -35,8 +35,8 @@ class CandidateRequest extends EventEmitter {
     this.seed = invite.seed
 
     this.keyPair = getKeyPair(this.seed)
+    this.id = this.keyPair.id
     this.userData = userData
-    this.id = inviteId(this.keyPair.publicKey)
 
     this.token = createToken(this.seed, userData)
     this.payload = createAuth(this.userData, this.token, this.keyPair)
@@ -254,10 +254,8 @@ function createInvite (key) {
   const seed = crypto.randomBytes(32)
   const keyPair = getKeyPair(seed)
 
-  const id = inviteId(keyPair.publicKey)
-
   return {
-    id,
+    id: keyPair.id,
     invite: c.encode(Invite, { discoveryKey, seed }),
     publicKey: keyPair.publicKey,
     discoveryKey
@@ -274,7 +272,9 @@ function getKeyPair (seed) {
 
   sodium.crypto_sign_seed_keypair(publicKey, secretKey, seed)
 
-  return { publicKey, secretKey }
+  const id = inviteId(publicKey)
+
+  return { publicKey, secretKey, id }
 }
 
 function encrypt (data, nonce, secretKey) {
