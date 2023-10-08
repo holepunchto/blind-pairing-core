@@ -211,6 +211,16 @@ module.exports.MemberRequest = MemberRequest
 module.exports.createInvite = createInvite
 module.exports.decodeInvite = decodeInvite
 module.exports.getKeyPair = getKeyPair
+module.exports.verifyReceipt = verifyReceipt
+
+function verifyReceipt (receipt, publicKey) {
+  try {
+    openAuth(c.decode(RequestPayload, receipt), publicKey)
+    return true
+  } catch (e) {
+    return false
+  }
+}
 
 function hash (ns, buf, len = 32) {
   const out = b4a.allocUnsafe(len)

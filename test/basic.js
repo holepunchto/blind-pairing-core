@@ -2,7 +2,7 @@ const { once } = require('events')
 const test = require('brittle')
 const b4a = require('b4a')
 
-const { CandidateRequest, MemberRequest, createInvite } = require('..')
+const { CandidateRequest, MemberRequest, createInvite, verifyReceipt } = require('..')
 
 test('basic valid pairing', async t => {
   t.plan(4)
@@ -30,6 +30,21 @@ test('basic valid pairing', async t => {
   const [reply] = await replied
 
   t.alike(reply.key, key)
+})
+
+test('basic receipt validation', async t => {
+  t.plan(2)
+
+  const key = b4a.allocUnsafe(32).fill(1)
+
+  const { id, invite, publicKey } = createInvite(key)
+
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'))
+  const member = MemberRequest.from(candidate.encode())
+  const userData = member.open(publicKey)
+
+  t.ok(verifyReceipt(member.receipt, publicKey))
+  t.absent(verifyReceipt(member.receipt.fill(0), publicKey))
 })
 
 test('basic valid pairing with encryption key', async t => {
