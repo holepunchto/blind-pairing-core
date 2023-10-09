@@ -37,11 +37,11 @@ test('basic receipt validation', async t => {
 
   const key = b4a.allocUnsafe(32).fill(1)
 
-  const { id, invite, publicKey } = createInvite(key)
+  const { invite, publicKey } = createInvite(key)
 
   const candidate = new CandidateRequest(invite, b4a.from('hello world'))
   const member = MemberRequest.from(candidate.encode())
-  const userData = member.open(publicKey)
+  member.open(publicKey)
 
   t.ok(verifyReceipt(member.receipt, publicKey))
   t.absent(verifyReceipt(member.receipt.fill(0), publicKey))
@@ -187,5 +187,33 @@ test('restoring a request', async t => {
   req2.handleResponse(res.response)
 
   const [reply] = await accept
+  t.alike(reply.key, key)
+})
+
+test('pass session token', async t => {
+  t.plan(4)
+
+  const key = b4a.allocUnsafe(32).fill(1)
+  const session = b4a.allocUnsafe(32).fill(0xff)
+
+  const { invite, publicKey } = createInvite(key)
+
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'), { session })
+
+  t.alike(candidate.session, session)
+
+  const replied = once(candidate, 'accepted')
+
+  const member = MemberRequest.from(candidate.encode())
+  const userData = member.open(publicKey)
+
+  t.alike(userData, b4a.from('hello world'))
+  t.alike(member.session, session)
+
+  member.confirm({ key })
+
+  candidate.handleResponse(member.response)
+  const [reply] = await replied
+
   t.alike(reply.key, key)
 })

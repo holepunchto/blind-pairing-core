@@ -6,7 +6,6 @@ const c = require('compact-encoding')
 
 const {
   Invite,
-  RequestPayload,
   ResponsePayload,
   InviteRequest,
   InviteResponse,
@@ -18,17 +17,16 @@ const {
 
 const [
   NS_SIGNATURE,
-  NS_KEYPAIR,
   NS_INVITE_ID,
   NS_TOKEN,
   NS_SESSION,
   NS_SESSION_KEY,
   NS_ENCRYPT,
   NS_NONCE
-] = crypto.namespace('blind-pairing', 8)
+] = crypto.namespace('blind-pairing', 7)
 
 class CandidateRequest extends EventEmitter {
-  constructor (invite, userData) {
+  constructor (invite, userData, opts = {}) {
     super()
 
     if (b4a.isBuffer(invite)) {
@@ -42,8 +40,10 @@ class CandidateRequest extends EventEmitter {
     this.id = deriveInviteId(this.keyPair.publicKey)
     this.userData = userData
 
-    this.token = createToken(this.seed, userData)
-    this.payload = createAuth(this.userData, this.token, this.keyPair)
+    this.session = opts.session || createSessionToken(this.keyPair.publicKey, userData)
+    this.payload = createAuth(this.userData, this.keyPair, this.session)
+
+    this.token = deriveToken(this.keyPair.publicKey, userData)
 
     this.auth = null
 
@@ -199,6 +199,7 @@ class MemberRequest {
 
       this.userData = userData
       this.session = session
+      this.token = deriveToken(publicKey, userData)
     } catch (e) {
       throw new Error('Failed to open invite with provided key')
     }
@@ -241,8 +242,8 @@ function deriveNonce (publicKey, sessionToken) {
   return crypto.hash([NS_NONCE, publicKey, sessionToken], out)
 }
 
-function createToken (seed, userData) {
-  return crypto.hash([NS_TOKEN, seed, userData])
+function deriveToken (publicKey, userData) {
+  return crypto.hash([NS_TOKEN, publicKey, userData])
 }
 
 function createSessionToken (publicKey, token) {
@@ -278,10 +279,9 @@ function decrypt (data, nonce, secretKey) {
   return output
 }
 
-function createAuth (userData, token, invitationKeyPair) {
+function createAuth (userData, invitationKeyPair, session) {
   const secret = deriveKey(invitationKeyPair.publicKey)
 
-  const session = createSessionToken(invitationKeyPair.publicKey, token)
   const nonce = deriveNonce(invitationKeyPair.publicKey, session)
   const signData = c.encode(AuthData, { userData, session })
   const signature = createSignature(signData, invitationKeyPair.secretKey)
