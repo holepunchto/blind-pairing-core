@@ -12,10 +12,11 @@ test('basic valid pairing', async t => {
   const candidate = new CandidateRequest(invite, b4a.from('hello world'))
   const member = MemberRequest.from(candidate.encode())
 
-  t.alike(member.id, candidate.id)
+  t.alike(member.inviteId, candidate.inviteId)
 
   const userData = member.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
+  t.alike(member.id, candidate.id)
 
   member.confirm({ key })
 
@@ -43,7 +44,7 @@ test('basic receipt validation', async t => {
 })
 
 test('basic valid pairing with encryption key', async t => {
-  t.plan(3)
+  t.plan(4)
 
   const key = b4a.allocUnsafe(32).fill(1)
   const encryptionKey = b4a.allocUnsafe(32).fill(2)
@@ -53,10 +54,11 @@ test('basic valid pairing with encryption key', async t => {
   const candidate = new CandidateRequest(invite, b4a.from('hello world'))
   const member = MemberRequest.from(candidate.encode())
 
-  t.alike(member.id, candidate.id)
+  t.alike(member.inviteId, candidate.inviteId)
 
   const userData = member.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
+  t.alike(member.id, candidate.id)
 
   member.confirm({ key, encryptionKey })
 
