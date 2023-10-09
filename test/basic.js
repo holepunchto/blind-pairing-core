@@ -5,26 +5,21 @@ const b4a = require('b4a')
 const { CandidateRequest, MemberRequest, createInvite, verifyReceipt } = require('..')
 
 test('basic valid pairing', async t => {
-  t.plan(4)
-
   const key = b4a.allocUnsafe(32).fill(1)
 
-  const { id, invite, publicKey } = createInvite(key)
+  const { invite, publicKey } = createInvite(key)
 
   const candidate = new CandidateRequest(invite, b4a.from('hello world'))
-
-  t.alike(candidate.id, id)
-
-  const replied = once(candidate, 'accepted')
-
   const member = MemberRequest.from(candidate.encode())
 
-  t.alike(member.id, id)
+  t.alike(member.id, candidate.id)
 
   const userData = member.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
   member.confirm({ key })
+
+  const replied = once(candidate, 'accepted')
 
   candidate.handleResponse(member.response)
   const [reply] = await replied
@@ -48,27 +43,24 @@ test('basic receipt validation', async t => {
 })
 
 test('basic valid pairing with encryption key', async t => {
-  t.plan(4)
+  t.plan(3)
 
   const key = b4a.allocUnsafe(32).fill(1)
   const encryptionKey = b4a.allocUnsafe(32).fill(2)
 
-  const { id, invite, publicKey } = createInvite(key)
+  const { invite, publicKey } = createInvite(key)
 
   const candidate = new CandidateRequest(invite, b4a.from('hello world'))
-
-  t.alike(candidate.id, id)
-
-  const replied = once(candidate, 'accepted')
-
   const member = MemberRequest.from(candidate.encode())
 
-  t.alike(member.id, id)
+  t.alike(member.id, candidate.id)
 
   const userData = member.open(publicKey)
   t.alike(userData, b4a.from('hello world'))
 
   member.confirm({ key, encryptionKey })
+
+  const replied = once(candidate, 'accepted')
 
   candidate.handleResponse(member.response)
   const [reply] = await replied
@@ -93,7 +85,7 @@ test('does not leak invitee key to unproven inviters', async t => {
 })
 
 test('invite response is static', async t => {
-  t.plan(9)
+  t.plan(12)
 
   const key = b4a.allocUnsafe(32).fill(1)
   const encryptionKey = b4a.allocUnsafe(32).fill(2)
@@ -108,6 +100,10 @@ test('invite response is static', async t => {
   const req3 = new CandidateRequest(invite2.invite, b4a.from('hello world'))
 
   t.unlike(req2.seed, req3.seed)
+
+  t.unlike(req2.id, req1.id)
+  t.unlike(req3.id, req1.id)
+  t.unlike(req3.id, req2.id)
 
   const res1 = MemberRequest.from(req1)
   const res2 = MemberRequest.from(req2)
