@@ -140,28 +140,6 @@ test('invite response is static', async t => {
   t.alike(await promise3, { key, encryptionKey })
 })
 
-test('using a request - payload', async t => {
-  t.plan(2)
-
-  const key = b4a.allocUnsafe(32).fill(1)
-
-  const { invite, publicKey } = createInvite(key)
-
-  const req = new CandidateRequest(invite, b4a.from('hello world'))
-  const res = MemberRequest.from(req.encode())
-
-  const userData = res.open(publicKey)
-  t.alike(userData, b4a.from('hello world'))
-
-  res.confirm({ key })
-
-  const accept = once(req, 'accepted')
-  req.handleResponse(res.respond().payload)
-
-  const [reply] = await accept
-  t.alike(reply.key, key)
-})
-
 test('using a request - response', async t => {
   t.plan(2)
 

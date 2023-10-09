@@ -50,16 +50,15 @@ class CandidateRequest extends EventEmitter {
   static encoding = PersistedRequest
 
   handleResponse (payload) {
+    if (b4a.isBuffer(payload)) {
+      payload = this._decodeResponse(payload)
+    }
+
     try {
       this._openResponse(payload)
     } catch (err) {
-      try {
-        const data = this._decodeResponse(payload)
-        return this.handleResponse(data)
-      } catch {
-        this.emit('rejected', err)
-        return null
-      }
+      this.emit('rejected', err)
+      return null
     }
 
     this._onAccept()
