@@ -3,56 +3,137 @@
 ### Pairing Flow
 
 The pairing flow proceeds as follows:
-1. The inviter creates an invitation (a new signing keypair) and shares `{ discoveryKey, secretKey }` with an invitee. `publicKey` is set aside for later use.
-2. The invitee discovers peers on `discoveryKey` and sends each peer a payload (the handshake hash signed with `secretKey` along with arbitrary `userData`) encrypted to a key derived from the invite `publicKey`.
-3. The inviter verifies the signature against the previously-stored `publicKey`, proving that the invitee has `secretKey`.
-4. The inviter sends a response to the invitee containing the `key` (previously withheld).
-5. The invitee verifies that `key` corresponds to `discoveryKey`, confirming that the remote peer has read-access to `key` (is a valid inviter).
-
-Note that verifying an invitation cannot be done automatically in `onrequest`. You must provide the correct public key to `req.verify(publicKey)`.
+1. The member (inviter) creates an invitation (a new signing keypair) and shares `{ discoveryKey, seed }` with a candidate (invitee). `publicKey` is set aside for later use.
+2. The candidate produces a request with arbitrary `userData` signed by the invitation keyPair, this is encrypted to a key derived from the invite `publicKey`.
+3. Upon receiving the request, the member decrypts the payload and verifies the signature against the invitation `publicKey`, proving that the invitee has `secretKey`.
+4. The member can evaluate `userData` and either confirm or deny the request. A response is returned to the candidate which may contain the `{ key, encryptionKey }` needed to join the room.
+5. The candidate verifies that `key` corresponds to `discoveryKey`, confirming that the remote peer has read-access to `key` (is a valid member).
 
 ## Usage
 
 ```js
-import { KeetPairing } from 'blind-pairing-core'
+import { CandidateRequest, MemberRequest, createInvite } from 'blind-pairing-core'
 
-// Inviter generates the invite
-const { invite, publicKey } = KeetPairing.createInvite(key) // key is a Hypercore or Autobase key
+const { invite, publicKey } = createInvite(key) // key is a Hypercore or Autobase key
 
-// pair1 is now listening for all requests on the key's corresponding discoveryKey
-pair1.join(key)
+// candidate
 
-const req = pair2.pair(invite, { userData: 'hello world' })
-req.on('accepted', () => console.log('accepted!'))
+const candidate = new CandidateRequest(invite, { userData: 'hello world' })
+candidate.on('accepted', () => console.log('accepted!'))
 
-const res = pair1.handleRequest(req)
+const transport = candidate.encode() 
 
-const userData = res.open(publicKey)
+// member
+
+const request = MemberRequest.from(transport)
+
+const userData = request.open(publicKey)
 console.log(userData) // hello world
 
-res.confirm()
+request.confirm({ key })
 
-pair2.handleResponse(res.response)
-// req accepted event will fire
+// candidate
+
+candidate.handleResponse(request.response)
+// candidate accepted event will fire
+
+console.log(candidate.auth) // { key }
 ```
 
 ## API
 
-### KeetPairing API
+exports:
+```
+{
+  CandidateRequest,
+  MemberRequest,
+  createInvite,
+  decodeInvite,
+  verifyReceipt
+}
+```
 
-#### `KeetPairing.createInvite(key)`
+### `CandidateRequest` API
 
-Static method to create invites for a given key.
+#### `const req = new CandidateRequest(invite, userData, opts = { session })`
 
-#### `KeetPairing.decodeInvite(encoded)`
+Instanstiate a new candidate request from a given invite.
+
+#### `const auth = req.handleResponse(payload)`
+
+Handle the response received from the peer.
+
+#### `req.destroy()`
+
+Destroy the request.
+
+#### `const buf = req.encode()`
+
+Encode the request to be sent to the peer.
+
+#### `const persisted = req.persist()`
+
+Returns a buffer that can be used to restore the request at a later point.
+
+#### `CandidateRequest.from (persisted)`
+
+Restore a persisted request.
+
+### `MemberRequest` API
+
+#### `const req = new MemberRequest(requestId, requestData)`
+
+Instantiate a new member request using the request id and the request data
+
+#### `const userData = req.open(invitePublicKey)`
+
+Open the request using the corresponding invitation public key.
+
+#### `req.confirm({ key, encryptionKey })`
+
+Confirm the request with the requested auth data.
+
+#### `req.deny()`
+
+Deny the request.
+
+#### `const req = MemberRequest.from(incomingRequest)`
+
+Static method to create a member request directly from a received request.
+
+#### `req.id`
+
+The unique id corresponding to the request
+
+#### `req.response`
+
+The response that should be sent back to the candidate. Only populated after the request is either confirmed or denied.
+
+#### `req.receipt`
+
+A stand alone receipt of this request that can be verified against the public key.
+
+### `const { invite, discoveryKey, publicKey } = createInvite(key)`
+
+Create invites for a given key.
+
+### `const { discoveryKey, seed } = decodeInvite(invite)`
+
+Decode an `invite` object.
+
+### `const valid = verifyReceipt(receipt, invitePublicKey)`
+
+Verify a previously opened request.
+
+#### `PairingCore.decodeInvite(encoded)`
 
 Static method to decode invites.
 
-#### `KeetPairing.openRequest(request, publicKey)`
+#### `PairingCore.openRequest(request, publicKey)`
 
 Static method for opening requests.
 
-#### `const pairing = new KeetPairing()`
+#### `const pairing = new PairingCore()`
 
 Instantiate a new pairing manager.
 

@@ -51,7 +51,20 @@ class CandidateRequest extends EventEmitter {
     this.auth = null
   }
 
-  static encoding = PersistedRequest
+  static from (buf) {
+    const info = c.decode(CandidateRequest.encoding, buf)
+    const { seed, discoveryKey, userData } = info
+    const request = new CandidateRequest({ discoveryKey, seed }, userData)
+
+    // clear completed request
+    if (info.key) {
+      request.key = info.key
+      request.token = null
+      request.payload = null
+    }
+
+    return request
+  }
 
   handleResponse (payload) {
     if (b4a.isBuffer(payload)) {
@@ -66,6 +79,7 @@ class CandidateRequest extends EventEmitter {
     }
 
     this._onAccept()
+
     return this.auth
   }
 
@@ -111,21 +125,6 @@ class CandidateRequest extends EventEmitter {
 
   persist () {
     return c.encode(CandidateRequest.encoding, this)
-  }
-
-  static from (buf) {
-    const info = c.decode(CandidateRequest.encoding, buf)
-    const { seed, discoveryKey, userData } = info
-    const request = new CandidateRequest({ discoveryKey, seed }, userData)
-
-    // clear completed request
-    if (info.key) {
-      request.key = info.key
-      request.token = null
-      request.payload = null
-    }
-
-    return request
   }
 }
 
