@@ -47,6 +47,7 @@ class CandidateRequest extends EventEmitter {
     this._encoded = null
 
     // set in reply
+    this.error = null
     this.auth = null
   }
 
@@ -69,17 +70,25 @@ class CandidateRequest extends EventEmitter {
   }
 
   _openResponse (payload) {
+    let plaintext
     try {
-      const response = openReply(payload, this.payload.session, this.keyPair.publicKey)
-      this.auth = c.decode(ResponsePayload, response)
-    } catch {
+      plaintext = openReply(payload, this.payload.session, this.keyPair.publicKey)
+    } catch (e) {
       throw new Error('Could not decrypt reply.')
     }
 
-    if (b4a.compare(crypto.discoveryKey(this.auth.key), this.discoveryKey)) {
-      this.auth = null
+    const { error, key, encryptionKey } = c.decode(ResponsePayload, plaintext)
+
+    if (error !== null) {
+      this.error = error
+      throw new Error('Pairing rejectd with status: ' + error)
+    }
+
+    if (b4a.compare(crypto.discoveryKey(key), this.discoveryKey)) {
       throw new Error('Invite response does not match discoveryKey')
     }
+
+    this.auth = { key, encryptionKey }
   }
 
   _onAccept () {
@@ -171,16 +180,23 @@ class MemberRequest {
     this._respond()
   }
 
-  deny () {
+  deny ({ error }) {
     if (this._confirmed || this._denied) return
     this._denied = true
+
+    if (!error) return
+
+    const payload = c.encode(ResponsePayload, { error })
+    this._payload = createReply(payload, this.session, this.publicKey)
+
+    this._respond()
   }
 
   respond () {
     return {
       discoveryKey: this.discoveryKey,
       id: this.id,
-      payload: this._confirmed ? this._payload : null
+      payload: this._payload
     }
   }
 

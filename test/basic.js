@@ -217,3 +217,27 @@ test('pass session token', async t => {
 
   t.alike(reply.key, key)
 })
+
+test('deny request', async t => {
+  t.plan(2)
+
+  const key = b4a.allocUnsafe(32).fill(1)
+  const session = b4a.allocUnsafe(32).fill(0xff)
+
+  const { invite, publicKey } = createInvite(key)
+
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'), { session })
+
+  const member = MemberRequest.from(candidate.encode())
+  member.open(publicKey)
+
+  member.deny({ error: 1 })
+
+  const rejected = once(candidate, 'rejected')
+  candidate.handleResponse(member.response)
+
+  await rejected
+
+  t.alike(candidate.error, 1)
+  t.alike(candidate.auth, null)
+})
