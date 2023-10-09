@@ -70,14 +70,14 @@ class CandidateRequest extends EventEmitter {
   }
 
   _openResponse (payload) {
-    let plaintext
     try {
-      plaintext = openReply(payload, this.payload.session, this.keyPair.publicKey)
+      const response = openReply(payload, this.payload.session, this.keyPair.publicKey)
+      this.response = c.decode(ResponsePayload, response)
     } catch (e) {
       throw new Error('Could not decrypt reply.')
     }
 
-    const { error, key, encryptionKey } = c.decode(ResponsePayload, plaintext)
+    const { error, key, encryptionKey } = this.response
 
     if (error !== null) {
       this.error = error
@@ -122,15 +122,23 @@ class CandidateRequest extends EventEmitter {
   }
 
   static from (buf) {
-    const info = c.decode(CandidateRequest.encoding, buf)
+    const info = c.decode(PersistedRequest, buf)
     const { seed, discoveryKey, userData } = info
     const request = new CandidateRequest({ discoveryKey, seed }, userData)
 
     // clear completed request
-    if (info.key) {
-      request.key = info.key
-      request.token = null
-      request.payload = null
+    if (!info.response) return request
+
+    request.response = info.response
+    request.token = null
+    request.payload = null
+
+    const { error, key, encryptionKey } = info.response
+
+    if (error) {
+      request.error = error
+    } else {
+      request.auth = { key, encryptionKey }
     }
 
     return request
