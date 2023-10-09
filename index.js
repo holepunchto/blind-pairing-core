@@ -10,18 +10,22 @@ const {
   ResponsePayload,
   InviteRequest,
   InviteResponse,
-  PersistedRequest,
   InviteData,
+  InviteReceipt,
+  PersistedRequest,
   AuthData
 } = require('./lib/messages')
 
 const [
   NS_SIGNATURE,
+  NS_KEYPAIR,
   NS_INVITE_ID,
   NS_TOKEN,
+  NS_SESSION,
+  NS_SESSION_KEY,
   NS_ENCRYPT,
   NS_NONCE
-] = crypto.namespace('blind-pairing', 5)
+] = crypto.namespace('blind-pairing', 8)
 
 class CandidateRequest extends EventEmitter {
   constructor (invite, userData) {
@@ -34,8 +38,8 @@ class CandidateRequest extends EventEmitter {
     this.discoveryKey = invite.discoveryKey
     this.seed = invite.seed
 
-    this.keyPair = getKeyPair(this.seed)
-    this.id = this.keyPair.id
+    this.keyPair = crypto.keyPair(this.seed)
+    this.id = deriveInviteId(this.keyPair.publicKey)
     this.userData = userData
 
     this.token = createToken(this.seed, userData)
@@ -67,7 +71,7 @@ class CandidateRequest extends EventEmitter {
 
   _openResponse (payload) {
     try {
-      const response = openReply(payload, this.token, this.keyPair.publicKey)
+      const response = openReply(payload, this.payload.session, this.keyPair.publicKey)
       this.auth = c.decode(ResponsePayload, response)
     } catch {
       throw new Error('Could not decrypt reply.')
@@ -137,7 +141,7 @@ class MemberRequest {
     // set in open
     this.publicKey = null
     this.userData = null
-    this.token = null
+    this.session = null
     this.receipt = null
 
     // set in confirm/respond
@@ -162,7 +166,7 @@ class MemberRequest {
     this._confirmed = true
 
     const payload = c.encode(ResponsePayload, response)
-    this._payload = createReply(payload, this.token, this.publicKey)
+    this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
   }
@@ -190,15 +194,16 @@ class MemberRequest {
     const requestData = this.requestData
 
     try {
-      const { userData, token } = openAuth(requestData, publicKey)
+      this.receipt = openAuth(requestData, publicKey)
+      const { userData, session } = c.decode(InviteReceipt, this.receipt)
+
       this.userData = userData
-      this.token = token
+      this.session = session
     } catch (e) {
       throw new Error('Failed to open invite with provided key')
     }
 
     this.publicKey = publicKey
-    this.receipt = c.encode(RequestPayload, requestData)
     this._opened = true
 
     return this.userData
@@ -209,52 +214,48 @@ module.exports.CandidateRequest = CandidateRequest
 module.exports.MemberRequest = MemberRequest
 module.exports.createInvite = createInvite
 module.exports.decodeInvite = decodeInvite
-module.exports.getKeyPair = getKeyPair
 module.exports.verifyReceipt = verifyReceipt
 
 function verifyReceipt (receipt, publicKey) {
-  try {
-    openAuth(c.decode(RequestPayload, receipt), publicKey)
-    return true
-  } catch (e) {
-    return false
+  if (b4a.isBuffer(receipt)) {
+    receipt = c.decode(InviteReceipt, receipt)
   }
+
+  const { session, signature, userData } = receipt
+  const signData = c.encode(AuthData, { userData, session })
+
+  return verifySignature(signData, signature, publicKey)
 }
 
-function hash (ns, buf, len = 32) {
-  const out = b4a.allocUnsafe(len)
-  sodium.crypto_generichash_batch(out, [
-    ns,
-    buf
-  ])
-  return out
-}
-
-function inviteId (publicKey) {
-  return hash(NS_INVITE_ID, publicKey)
-}
-
-function createToken (seed, userData) {
-  const data = b4a.concat([seed, userData])
-  return hash(NS_TOKEN, data, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES)
+function deriveInviteId (publicKey) {
+  return crypto.hash([NS_INVITE_ID, publicKey])
 }
 
 function deriveKey (publicKey) {
-  return hash(NS_ENCRYPT, publicKey, sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES)
+  const out = b4a.allocUnsafe(sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES)
+  return crypto.hash([NS_ENCRYPT, publicKey], out)
 }
 
-function getNonce (publicKey, token) {
-  const data = b4a.concat([publicKey, token])
-  return hash(NS_NONCE, data, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES)
+function deriveNonce (publicKey, sessionToken) {
+  const out = b4a.allocUnsafe(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES)
+  return crypto.hash([NS_NONCE, publicKey, sessionToken], out)
+}
+
+function createToken (seed, userData) {
+  return crypto.hash([NS_TOKEN, seed, userData])
+}
+
+function createSessionToken (publicKey, token) {
+  return crypto.hash([NS_SESSION, publicKey, token])
 }
 
 function createInvite (key) {
   const discoveryKey = crypto.discoveryKey(key)
   const seed = crypto.randomBytes(32)
-  const keyPair = getKeyPair(seed)
+  const keyPair = crypto.keyPair(seed)
 
   return {
-    id: keyPair.id,
+    id: deriveInviteId(keyPair.publicKey),
     invite: c.encode(Invite, { discoveryKey, seed }),
     publicKey: keyPair.publicKey,
     discoveryKey
@@ -263,17 +264,6 @@ function createInvite (key) {
 
 function decodeInvite (invite) {
   return c.decode(Invite, invite)
-}
-
-function getKeyPair (seed) {
-  const publicKey = b4a.allocUnsafe(sodium.crypto_sign_PUBLICKEYBYTES)
-  const secretKey = b4a.allocUnsafe(sodium.crypto_sign_SECRETKEYBYTES)
-
-  sodium.crypto_sign_seed_keypair(publicKey, secretKey, seed)
-
-  const id = inviteId(publicKey)
-
-  return { publicKey, secretKey, id }
 }
 
 function encrypt (data, nonce, secretKey) {
@@ -291,15 +281,16 @@ function decrypt (data, nonce, secretKey) {
 function createAuth (userData, token, invitationKeyPair) {
   const secret = deriveKey(invitationKeyPair.publicKey)
 
-  const nonce = getNonce(invitationKeyPair.publicKey, token)
-  const signData = c.encode(AuthData, { userData, token })
+  const session = createSessionToken(invitationKeyPair.publicKey, token)
+  const nonce = deriveNonce(invitationKeyPair.publicKey, session)
+  const signData = c.encode(AuthData, { userData, session })
   const signature = createSignature(signData, invitationKeyPair.secretKey)
 
   const inviteData = c.encode(InviteData, { userData, signature })
   const data = encrypt(inviteData, nonce, secret)
 
   return {
-    token,
+    session,
     data
   }
 }
@@ -307,9 +298,9 @@ function createAuth (userData, token, invitationKeyPair) {
 function openAuth (payload, invitationKey) {
   const secret = deriveKey(invitationKey)
 
-  const { token, data } = payload
+  const { session, data } = payload
 
-  const nonce = getNonce(invitationKey, token)
+  const nonce = deriveNonce(invitationKey, session)
 
   let plaintext
   try {
@@ -320,30 +311,27 @@ function openAuth (payload, invitationKey) {
   }
 
   const { userData, signature } = c.decode(InviteData, plaintext)
-  const signData = c.encode(AuthData, { userData, token })
+  const receipt = { session, signature, userData }
 
-  if (!verifySignature(signData, signature, invitationKey)) {
-    throw new Error('Invalid signature')
+  if (!verifyReceipt(receipt, invitationKey)) {
+    throw new Error('Invalid reply')
   }
 
-  return {
-    token,
-    userData
-  }
+  return c.encode(InviteReceipt, { session, signature, userData })
 }
 
-function createReply (payload, token, invitationKey) {
-  const sessionKey = b4a.concat([invitationKey, token])
+function createReply (payload, sessionToken, invitationKey) {
+  const sessionKey = crypto.hash([NS_SESSION_KEY, invitationKey, sessionToken])
   const secret = deriveKey(sessionKey)
-  const nonce = getNonce(sessionKey, token)
+  const nonce = deriveNonce(sessionKey, sessionToken)
 
   return encrypt(payload, nonce, secret)
 }
 
-function openReply (data, token, invitationKey) {
-  const sessionKey = b4a.concat([invitationKey, token])
+function openReply (data, sessionToken, invitationKey) {
+  const sessionKey = crypto.hash([NS_SESSION_KEY, invitationKey, sessionToken])
   const secret = deriveKey(sessionKey)
-  const nonce = getNonce(sessionKey, token)
+  const nonce = deriveNonce(sessionKey, sessionToken)
 
   return decrypt(data, nonce, secret)
 }
