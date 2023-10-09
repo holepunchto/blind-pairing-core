@@ -18,12 +18,13 @@ const {
 const [
   NS_SIGNATURE,
   NS_TOKEN,
+  NS_INVITE_ID,
   NS_REQUEST_ID,
   NS_SESSION,
   NS_SESSION_KEY,
   NS_ENCRYPT,
   NS_NONCE
-] = crypto.namespace('blind-pairing', 7)
+] = crypto.namespace('blind-pairing', 8)
 
 class CandidateRequest extends EventEmitter {
   constructor (invite, userData, opts = {}) {
@@ -37,11 +38,12 @@ class CandidateRequest extends EventEmitter {
     this.seed = invite.seed
 
     this.keyPair = crypto.keyPair(this.seed)
+    this.inviteId = deriveInviteId(this.keyPair.publicKey)
     this.userData = userData
 
     this.token = deriveToken(this.keyPair.publicKey, userData)
-    this.id = deriveRequestId(this.token)
     this.session = opts.session || createSessionToken(this.token)
+    this.id = deriveRequestId(this.session)
 
     this.payload = createAuth(this.userData, this.keyPair, this.session)
 
@@ -51,7 +53,20 @@ class CandidateRequest extends EventEmitter {
     this.auth = null
   }
 
-  static encoding = PersistedRequest
+  static from (buf) {
+    const info = c.decode(PersistedRequest, buf)
+    const { seed, discoveryKey, userData } = info
+    const request = new CandidateRequest({ discoveryKey, seed }, userData)
+
+    // clear completed request
+    if (info.key) {
+      request.key = info.key
+      request.token = null
+      request.payload = null
+    }
+
+    return request
+  }
 
   handleResponse (payload) {
     if (b4a.isBuffer(payload)) {
@@ -66,6 +81,7 @@ class CandidateRequest extends EventEmitter {
     }
 
     this._onAccept()
+
     return this.auth
   }
 
@@ -110,38 +126,27 @@ class CandidateRequest extends EventEmitter {
   }
 
   persist () {
-    return c.encode(CandidateRequest.encoding, this)
-  }
-
-  static from (buf) {
-    const info = c.decode(CandidateRequest.encoding, buf)
-    const { seed, discoveryKey, userData } = info
-    const request = new CandidateRequest({ discoveryKey, seed }, userData)
-
-    // clear completed request
-    if (info.key) {
-      request.key = info.key
-      request.token = null
-      request.payload = null
-    }
-
-    return request
+    return c.encode(PersistedRequest, this)
   }
 }
 
 class MemberRequest {
   constructor (inviteId, requestData) {
-    this.id = inviteId
+    this.inviteId = inviteId
     this.requestData = requestData
 
     this._opened = false
     this._confirmed = false
     this._denied = false
 
+    // set by transport
+    this.discoveryKey = null
+
     // set in open
     this.publicKey = null
     this.userData = null
     this.session = null
+    this.id = null
     this.receipt = null
 
     // set in confirm/respond
@@ -155,7 +160,7 @@ class MemberRequest {
     }
 
     return new MemberRequest(
-      req.id,
+      req.inviteId,
       req.payload
     )
   }
@@ -189,15 +194,14 @@ class MemberRequest {
   open (publicKey) {
     if (this._opened && b4a.equals(this.publicKey, publicKey)) return this.userData
 
-    const requestData = this.requestData
-
     try {
-      this.receipt = openAuth(requestData, publicKey)
+      this.receipt = openAuth(this.requestData, publicKey)
       const { userData, session } = c.decode(InviteReceipt, this.receipt)
 
       this.userData = userData
       this.session = session
       this.token = deriveToken(publicKey, userData)
+      this.id = deriveRequestId(this.session)
     } catch (e) {
       throw new Error('Failed to open invite with provided key')
     }
@@ -224,6 +228,10 @@ function verifyReceipt (receipt, publicKey) {
   const signData = c.encode(AuthData, { userData, session })
 
   return verifySignature(signData, signature, publicKey)
+}
+
+function deriveInviteId (publicKey) {
+  return crypto.hash([NS_INVITE_ID, publicKey])
 }
 
 function deriveKey (publicKey) {
@@ -254,6 +262,7 @@ function createInvite (key) {
   const keyPair = crypto.keyPair(seed)
 
   return {
+    id: deriveInviteId(keyPair.publicKey),
     invite: c.encode(Invite, { discoveryKey, seed }),
     publicKey: keyPair.publicKey,
     discoveryKey
