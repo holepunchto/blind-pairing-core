@@ -256,16 +256,16 @@ function deriveRequestId (sessionToken) {
   return crypto.hash([NS_REQUEST_ID, sessionToken])
 }
 
-function createInvite (key) {
-  const discoveryKey = crypto.discoveryKey(key)
+function createInvite (key, { discoveryKey = crypto.discoveryKey(key), expires = 0 } = {}) {
   const seed = crypto.randomBytes(32)
   const keyPair = crypto.keyPair(seed)
 
   return {
     id: deriveInviteId(keyPair.publicKey),
-    invite: c.encode(Invite, { discoveryKey, seed }),
+    invite: c.encode(Invite, { seed, discoveryKey, expires }),
     publicKey: keyPair.publicKey,
-    discoveryKey
+    discoveryKey,
+    expires
   }
 }
 
