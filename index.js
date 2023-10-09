@@ -17,8 +17,8 @@ const {
 
 const [
   NS_SIGNATURE,
-  NS_INVITE_ID,
   NS_TOKEN,
+  NS_REQUEST_ID,
   NS_SESSION,
   NS_SESSION_KEY,
   NS_ENCRYPT,
@@ -37,13 +37,14 @@ class CandidateRequest extends EventEmitter {
     this.seed = invite.seed
 
     this.keyPair = crypto.keyPair(this.seed)
-    this.id = deriveInviteId(this.keyPair.publicKey)
     this.userData = userData
 
-    this.session = opts.session || createSessionToken(this.keyPair.publicKey, userData)
+    this.token = deriveToken(this.keyPair.publicKey, userData)
+    this.id = deriveRequestId(this.token)
+    this.session = opts.session || createSessionToken(this.token)
+
     this.payload = createAuth(this.userData, this.keyPair, this.session)
 
-    this.token = deriveToken(this.keyPair.publicKey, userData)
     this._encoded = null
 
     // set in reply
@@ -129,8 +130,7 @@ class CandidateRequest extends EventEmitter {
 }
 
 class MemberRequest {
-  constructor (discoveryKey, inviteId, requestData) {
-    this.discoveryKey = discoveryKey
+  constructor (inviteId, requestData) {
     this.id = inviteId
     this.requestData = requestData
 
@@ -155,7 +155,6 @@ class MemberRequest {
     }
 
     return new MemberRequest(
-      req.discoveryKey,
       req.id,
       req.payload
     )
@@ -178,7 +177,6 @@ class MemberRequest {
 
   respond () {
     return {
-      discoveryKey: this.discoveryKey,
       id: this.id,
       payload: this._confirmed ? this._payload : null
     }
@@ -228,10 +226,6 @@ function verifyReceipt (receipt, publicKey) {
   return verifySignature(signData, signature, publicKey)
 }
 
-function deriveInviteId (publicKey) {
-  return crypto.hash([NS_INVITE_ID, publicKey])
-}
-
 function deriveKey (publicKey) {
   const out = b4a.allocUnsafe(sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES)
   return crypto.hash([NS_ENCRYPT, publicKey], out)
@@ -246,8 +240,12 @@ function deriveToken (publicKey, userData) {
   return crypto.hash([NS_TOKEN, publicKey, userData])
 }
 
-function createSessionToken (publicKey, token) {
-  return crypto.hash([NS_SESSION, publicKey, token])
+function createSessionToken (token) {
+  return crypto.hash([NS_SESSION, token])
+}
+
+function deriveRequestId (sessionToken) {
+  return crypto.hash([NS_REQUEST_ID, sessionToken])
 }
 
 function createInvite (key) {
@@ -256,7 +254,6 @@ function createInvite (key) {
   const keyPair = crypto.keyPair(seed)
 
   return {
-    id: deriveInviteId(keyPair.publicKey),
     invite: c.encode(Invite, { discoveryKey, seed }),
     publicKey: keyPair.publicKey,
     discoveryKey
