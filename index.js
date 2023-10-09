@@ -44,11 +44,10 @@ class CandidateRequest extends EventEmitter {
     this.payload = createAuth(this.userData, this.keyPair, this.session)
 
     this.token = deriveToken(this.keyPair.publicKey, userData)
+    this._encoded = null
 
+    // set in reply
     this.auth = null
-
-    // set by relay
-    this._relaySeq = null
   }
 
   static encoding = PersistedRequest
@@ -105,7 +104,8 @@ class CandidateRequest extends EventEmitter {
   }
 
   encode () {
-    return c.encode(InviteRequest, this)
+    if (!this._encoded) this._encoded = c.encode(InviteRequest, this)
+    return this._encoded
   }
 
   persist () {
