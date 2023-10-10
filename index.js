@@ -174,7 +174,7 @@ class MemberRequest {
     this._respond()
   }
 
-  deny ({ status }) {
+  deny ({ status = 1 } = {}) {
     if (this._confirmed || this._denied) return
     this._denied = true
 
