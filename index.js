@@ -168,7 +168,7 @@ class MemberRequest {
     if (this._confirmed || this._denied || !this._opened) return
     this._confirmed = true
 
-    const payload = c.encode(ResponsePayload, { key, encryptionKey, status: 0 })
+    const payload = c.encode(ResponsePayload, { status: 0, key, encryptionKey })
     this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
@@ -180,7 +180,7 @@ class MemberRequest {
 
     if (!status) return
 
-    const payload = c.encode(ResponsePayload, { status })
+    const payload = c.encode(ResponsePayload, { status, key: null, encryptionKey: null })
     this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
