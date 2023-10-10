@@ -243,6 +243,7 @@ module.exports.MemberRequest = MemberRequest
 module.exports.createInvite = createInvite
 module.exports.decodeInvite = decodeInvite
 module.exports.verifyReceipt = verifyReceipt
+module.exports.Invite = Invite
 
 function verifyReceipt (receipt, publicKey) {
   if (b4a.isBuffer(receipt)) {
