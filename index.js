@@ -129,33 +129,6 @@ class CandidateRequest extends EventEmitter {
     if (!this._encoded) this._encoded = c.encode(InviteRequest, this)
     return this._encoded
   }
-
-  persist () {
-    return c.encode(CandidateRequest.encoding, this)
-  }
-
-  static from (buf) {
-    const info = c.decode(PersistedRequest, buf)
-    const { seed, discoveryKey, userData } = info
-    const request = new CandidateRequest({ discoveryKey, seed }, userData)
-
-    // clear completed request
-    if (!info.response) return request
-
-    request.response = info.response
-    request.token = null
-    request.payload = null
-
-    const { error, key, encryptionKey } = info.response
-
-    if (error) {
-      request.error = error
-    } else {
-      request.auth = { key, encryptionKey }
-    }
-
-    return request
-  }
 }
 
 class MemberRequest {

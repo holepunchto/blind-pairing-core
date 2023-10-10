@@ -170,8 +170,6 @@ test('restoring a request', async t => {
   const { invite, publicKey } = createInvite(key)
 
   const req = new CandidateRequest(invite, b4a.from('hello world'))
-  const stored = req.persist()
-
   const res = MemberRequest.from(req.encode())
 
   const userData = res.open(publicKey)
@@ -179,7 +177,7 @@ test('restoring a request', async t => {
 
   res.confirm({ key })
 
-  const req2 = CandidateRequest.from(stored)
+  const req2 = new CandidateRequest(invite, b4a.from('hello world'))
 
   req2.on('rejected', err => t.fail(err))
 
