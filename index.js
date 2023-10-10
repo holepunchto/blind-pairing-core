@@ -23,13 +23,14 @@ const {
 
 const [
   NS_SIGNATURE,
-  NS_INVITE_ID,
   NS_TOKEN,
+  NS_INVITE_ID,
+  NS_REQUEST_ID,
   NS_SESSION,
   NS_SESSION_KEY,
   NS_ENCRYPT,
   NS_NONCE
-] = crypto.namespace('blind-pairing', 7)
+] = crypto.namespace('blind-pairing', 8)
 
 class CandidateRequest extends EventEmitter {
   constructor (invite, userData, opts = {}) {
@@ -43,20 +44,35 @@ class CandidateRequest extends EventEmitter {
     this.seed = invite.seed
 
     this.keyPair = crypto.keyPair(this.seed)
-    this.id = deriveInviteId(this.keyPair.publicKey)
+    this.inviteId = deriveInviteId(this.keyPair.publicKey)
     this.userData = userData
 
-    this.session = opts.session || createSessionToken(this.keyPair.publicKey, userData)
+    this.token = deriveToken(this.keyPair.publicKey, userData)
+    this.session = opts.session || createSessionToken(this.token)
+    this.id = deriveRequestId(this.session)
+
     this.payload = createAuth(this.userData, this.keyPair, this.session)
 
-    this.token = deriveToken(this.keyPair.publicKey, userData)
     this._encoded = null
 
     // set in reply
     this.auth = null
   }
 
-  static encoding = PersistedRequest
+  static from (buf) {
+    const info = c.decode(PersistedRequest, buf)
+    const { seed, discoveryKey, userData } = info
+    const request = new CandidateRequest({ discoveryKey, seed }, userData)
+
+    // clear completed request
+    if (info.key) {
+      request.key = info.key
+      request.token = null
+      request.payload = null
+    }
+
+    return request
+  }
 
   handleResponse (payload) {
     if (b4a.isBuffer(payload)) {
@@ -71,6 +87,7 @@ class CandidateRequest extends EventEmitter {
     }
 
     this._onAccept()
+
     return this.auth
   }
 
@@ -132,19 +149,22 @@ class CandidateRequest extends EventEmitter {
 }
 
 class MemberRequest {
-  constructor (discoveryKey, inviteId, requestData) {
-    this.discoveryKey = discoveryKey
-    this.id = inviteId
+  constructor (inviteId, requestData) {
+    this.inviteId = inviteId
     this.requestData = requestData
 
     this._opened = false
     this._confirmed = false
     this._denied = false
 
+    // set by transport
+    this.discoveryKey = null
+
     // set in open
     this.publicKey = null
     this.userData = null
     this.session = null
+    this.id = null
     this.receipt = null
 
     // set in confirm/respond
@@ -158,8 +178,7 @@ class MemberRequest {
     }
 
     return new MemberRequest(
-      req.discoveryKey,
-      req.id,
+      req.inviteId,
       req.payload
     )
   }
@@ -188,7 +207,6 @@ class MemberRequest {
 
   respond () {
     return {
-      discoveryKey: this.discoveryKey,
       id: this.id,
       payload: this._payload
     }
@@ -201,15 +219,14 @@ class MemberRequest {
   open (publicKey) {
     if (this._opened && b4a.equals(this.publicKey, publicKey)) return this.userData
 
-    const requestData = this.requestData
-
     try {
-      this.receipt = openAuth(requestData, publicKey)
+      this.receipt = openAuth(this.requestData, publicKey)
       const { userData, session } = c.decode(InviteReceipt, this.receipt)
 
       this.userData = userData
       this.session = session
       this.token = deriveToken(publicKey, userData)
+      this.id = deriveRequestId(this.session)
     } catch (e) {
       throw new Error('Failed to open invite with provided key')
     }
@@ -256,20 +273,23 @@ function deriveToken (publicKey, userData) {
   return crypto.hash([NS_TOKEN, publicKey, userData])
 }
 
-function createSessionToken (publicKey, token) {
-  return crypto.hash([NS_SESSION, publicKey, token])
+function createSessionToken (token) {
+  return crypto.hash([NS_SESSION, token])
 }
 
-function createInvite (key) {
-  const discoveryKey = crypto.discoveryKey(key)
-  const seed = crypto.randomBytes(32)
+function deriveRequestId (sessionToken) {
+  return crypto.hash([NS_REQUEST_ID, sessionToken])
+}
+
+function createInvite (key, { discoveryKey = crypto.discoveryKey(key), expires = 0, seed = crypto.randomBytes(32) } = {}) {
   const keyPair = crypto.keyPair(seed)
 
   return {
     id: deriveInviteId(keyPair.publicKey),
-    invite: c.encode(Invite, { discoveryKey, seed }),
+    invite: c.encode(Invite, { seed, discoveryKey, expires }),
     publicKey: keyPair.publicKey,
-    discoveryKey
+    discoveryKey,
+    expires
   }
 }
 

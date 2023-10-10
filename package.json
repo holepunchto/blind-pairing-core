@@ -1,6 +1,6 @@
 {
   "name": "@holepunchto/blind-pairing-core",
-  "version": "0.0.5",
+  "version": "0.0.9",
   "description": "Core blind pairing module",
   "main": "index.js",
   "directories": {
