@@ -191,11 +191,11 @@ class MemberRequest {
     )
   }
 
-  confirm (response) {
+  confirm ({ key, encryptionKey }) {
     if (this._confirmed || this._denied || !this._opened) return
     this._confirmed = true
 
-    const payload = c.encode(ResponsePayload, response)
+    const payload = c.encode(ResponsePayload, { key, encryptionKey, status: 0 })
     this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
