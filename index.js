@@ -15,6 +15,12 @@ const {
   AuthData
 } = require('./lib/messages')
 
+const {
+  PAIRING_REJECTED,
+  INVITE_USED,
+  INVITE_EXPIRED
+} = require('./lib/errors')
+
 const [
   NS_SIGNATURE,
   NS_INVITE_ID,
@@ -47,7 +53,6 @@ class CandidateRequest extends EventEmitter {
     this._encoded = null
 
     // set in reply
-    this.error = null
     this.auth = null
   }
 
@@ -77,11 +82,19 @@ class CandidateRequest extends EventEmitter {
       throw new Error('Could not decrypt reply.')
     }
 
-    const { error, key, encryptionKey } = this.response
+    const { status, key, encryptionKey } = this.response
 
-    if (error !== null) {
-      this.error = error
-      throw new Error('Pairing rejectd with status: ' + error)
+    if (status !== 0) {
+      switch (status) {
+        case 1:
+          throw PAIRING_REJECTED()
+
+        case 2:
+          throw INVITE_USED()
+
+        case 3:
+          throw INVITE_EXPIRED()
+      }
     }
 
     if (b4a.compare(crypto.discoveryKey(key), this.discoveryKey)) {
@@ -188,13 +201,13 @@ class MemberRequest {
     this._respond()
   }
 
-  deny ({ error }) {
+  deny ({ status }) {
     if (this._confirmed || this._denied) return
     this._denied = true
 
-    if (!error) return
+    if (!status) return
 
-    const payload = c.encode(ResponsePayload, { error })
+    const payload = c.encode(ResponsePayload, { status })
     this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
