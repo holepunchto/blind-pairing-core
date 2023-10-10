@@ -15,6 +15,12 @@ const {
   AuthData
 } = require('./lib/messages')
 
+const {
+  PAIRING_REJECTED,
+  INVITE_USED,
+  INVITE_EXPIRED
+} = require('./lib/errors')
+
 const [
   NS_SIGNATURE,
   NS_TOKEN,
@@ -88,15 +94,31 @@ class CandidateRequest extends EventEmitter {
   _openResponse (payload) {
     try {
       const response = openReply(payload, this.payload.session, this.keyPair.publicKey)
-      this.auth = c.decode(ResponsePayload, response)
-    } catch {
+      this.response = c.decode(ResponsePayload, response)
+    } catch (e) {
       throw new Error('Could not decrypt reply.')
     }
 
-    if (b4a.compare(crypto.discoveryKey(this.auth.key), this.discoveryKey)) {
-      this.auth = null
+    const { status, key, encryptionKey } = this.response
+
+    if (status !== 0) {
+      switch (status) {
+        case 1:
+          throw PAIRING_REJECTED()
+
+        case 2:
+          throw INVITE_USED()
+
+        case 3:
+          throw INVITE_EXPIRED()
+      }
+    }
+
+    if (b4a.compare(crypto.discoveryKey(key), this.discoveryKey)) {
       throw new Error('Invite response does not match discoveryKey')
     }
+
+    this.auth = { key, encryptionKey }
   }
 
   _onAccept () {
@@ -123,10 +145,6 @@ class CandidateRequest extends EventEmitter {
   encode () {
     if (!this._encoded) this._encoded = c.encode(InviteRequest, this)
     return this._encoded
-  }
-
-  persist () {
-    return c.encode(PersistedRequest, this)
   }
 }
 
@@ -165,25 +183,32 @@ class MemberRequest {
     )
   }
 
-  confirm (response) {
+  confirm ({ key, encryptionKey }) {
     if (this._confirmed || this._denied || !this._opened) return
     this._confirmed = true
 
-    const payload = c.encode(ResponsePayload, response)
+    const payload = c.encode(ResponsePayload, { status: 0, key, encryptionKey })
     this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
   }
 
-  deny () {
+  deny ({ status = 1 } = {}) {
     if (this._confirmed || this._denied) return
     this._denied = true
+
+    if (!status) return
+
+    const payload = c.encode(ResponsePayload, { status, key: null, encryptionKey: null })
+    this._payload = createReply(payload, this.session, this.publicKey)
+
+    this._respond()
   }
 
   respond () {
     return {
       id: this.id,
-      payload: this._confirmed ? this._payload : null
+      payload: this._payload
     }
   }
 

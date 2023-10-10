@@ -168,8 +168,6 @@ test('restoring a request', async t => {
   const { invite, publicKey } = createInvite(key)
 
   const req = new CandidateRequest(invite, b4a.from('hello world'))
-  const stored = req.persist()
-
   const res = MemberRequest.from(req.encode())
 
   const userData = res.open(publicKey)
@@ -177,7 +175,7 @@ test('restoring a request', async t => {
 
   res.confirm({ key })
 
-  const req2 = CandidateRequest.from(stored)
+  const req2 = new CandidateRequest(invite, b4a.from('hello world'))
 
   req2.on('rejected', err => t.fail(err))
 
@@ -214,4 +212,61 @@ test('pass session token', async t => {
   const [reply] = await replied
 
   t.alike(reply.key, key)
+})
+
+test('deny request', async t => {
+  t.plan(2)
+
+  const key = b4a.allocUnsafe(32).fill(1)
+  const session = b4a.allocUnsafe(32).fill(0xff)
+
+  const { invite, publicKey } = createInvite(key)
+
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'), { session })
+
+  const member = MemberRequest.from(candidate.encode())
+  member.open(publicKey)
+
+  member.deny({ status: 1 })
+
+  const rejected = once(candidate, 'rejected')
+  candidate.handleResponse(member.response)
+
+  const [err] = await rejected
+
+  t.alike(err.code, 'PAIRING_REJECTED')
+  t.alike(candidate.auth, null)
+})
+
+test('candidate accepted after deny', async t => {
+  t.plan(3)
+
+  const key = b4a.allocUnsafe(32).fill(1)
+  const session = b4a.allocUnsafe(32).fill(0xff)
+
+  const { invite, publicKey } = createInvite(key)
+
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'), { session })
+
+  const member = MemberRequest.from(candidate.encode())
+  member.open(publicKey)
+  member.deny({ status: 1 })
+
+  const rejected = once(candidate, 'rejected')
+  candidate.handleResponse(member.response)
+
+  await rejected
+
+  t.alike(candidate.auth, null)
+
+  const member2 = MemberRequest.from(candidate.encode())
+  member2.open(publicKey)
+  member2.confirm({ key })
+
+  const accepted = once(candidate, 'accepted')
+  candidate.handleResponse(member2.response)
+
+  await t.execution(accepted)
+
+  t.alike(candidate.auth, { key, encryptionKey: null })
 })
