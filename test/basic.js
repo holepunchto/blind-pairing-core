@@ -39,8 +39,8 @@ test('basic receipt validation', async t => {
   const member = MemberRequest.from(candidate.encode())
   member.open(publicKey)
 
-  t.ok(verifyReceipt(member.receipt, publicKey))
-  t.absent(verifyReceipt(member.receipt.fill(0), publicKey))
+  t.alike(verifyReceipt(member.receipt, publicKey), b4a.from('hello world'))
+  t.alike(verifyReceipt(member.receipt.fill(0), publicKey), null)
 })
 
 test('basic valid pairing with encryption key', async t => {

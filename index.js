@@ -253,7 +253,9 @@ function verifyReceipt (receipt, publicKey) {
   const { session, signature, userData } = receipt
   const signData = c.encode(AuthData, { userData, session })
 
-  return verifySignature(signData, signature, publicKey)
+  if (!verifySignature(signData, signature, publicKey)) return null
+
+  return userData
 }
 
 function deriveInviteId (publicKey) {

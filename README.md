@@ -149,9 +149,9 @@ Create invites for a given key.
 
 Decode an `invite` object.
 
-### `const valid = verifyReceipt(receipt, invitePublicKey)`
+### `const userData = verifyReceipt(receipt, invitePublicKey)`
 
-Verify a previously opened request.
+Verify a previously opened request. Returns `userData` if receipt is valid and `null` otherwise.
 
 ## License
 MIT
