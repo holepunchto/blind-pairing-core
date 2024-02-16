@@ -10,12 +10,18 @@
   "scripts": {
     "test": "standard && brittle test/*.js"
   },
+  "imports": {
+    "events": {
+      "bare": "bare-events",
+      "default": "events"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/holepunchto/blind-pairing-core.git"
   },
   "author": "Holepunch",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "bugs": {
     "url": "https://github.com/holepunchto/blind-pairing-core/issues"
   },
@@ -26,6 +32,9 @@
     "hypercore-crypto": "^3.4.0",
     "sodium-universal": "^4.0.0",
     "tiny-buffer-map": "^1.1.1"
+  },
+  "optionalDependencies": {
+    "bare-events": "^2.2.0"
   },
   "devDependencies": {
     "brittle": "^3.2.1",
