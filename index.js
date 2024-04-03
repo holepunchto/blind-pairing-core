@@ -284,7 +284,13 @@ function deriveRequestId (sessionToken) {
   return crypto.hash([NS_REQUEST_ID, sessionToken])
 }
 
-function createInvite (key, { discoveryKey = crypto.discoveryKey(key), expires = 0, seed = crypto.randomBytes(32) } = {}) {
+function createInvite (key, opts = {}) {
+  const {
+    discoveryKey = crypto.discoveryKey(key),
+    expires = 0,
+    seed = crypto.randomBytes(32),
+    sensitive = false
+  } = opts
   const keyPair = crypto.keyPair(seed)
 
   return {
@@ -292,7 +298,8 @@ function createInvite (key, { discoveryKey = crypto.discoveryKey(key), expires =
     invite: c.encode(Invite, { seed, discoveryKey, expires }),
     publicKey: keyPair.publicKey,
     discoveryKey,
-    expires
+    expires,
+    sensitive
   }
 }
 
