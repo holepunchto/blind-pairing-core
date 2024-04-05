@@ -99,7 +99,7 @@ class CandidateRequest extends EventEmitter {
       throw new Error('Could not decrypt reply.')
     }
 
-    const { status, key, encryptionKey } = this.response
+    const { status, key, encryptionKey, fastForwardTo } = this.response
 
     if (status !== 0) {
       switch (status) {
@@ -118,7 +118,7 @@ class CandidateRequest extends EventEmitter {
       throw new Error('Invite response does not match discoveryKey')
     }
 
-    this.auth = { key, encryptionKey }
+    this.auth = { key, encryptionKey, fastForwardTo }
   }
 
   _onAccept () {
@@ -183,11 +183,11 @@ class MemberRequest {
     )
   }
 
-  confirm ({ key, encryptionKey }) {
+  confirm ({ key, encryptionKey, fastForwardTo }) {
     if (this._confirmed || this._denied || !this._opened) return
     this._confirmed = true
 
-    const payload = c.encode(ResponsePayload, { status: 0, key, encryptionKey })
+    const payload = c.encode(ResponsePayload, { status: 0, key, encryptionKey, fastForwardTo })
     this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
@@ -199,7 +199,12 @@ class MemberRequest {
 
     if (!status) return
 
-    const payload = c.encode(ResponsePayload, { status, key: null, encryptionKey: null })
+    const payload = c.encode(ResponsePayload, {
+      status,
+      key: null,
+      encryptionKey: null,
+      fastForwardTo: null
+    })
     this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
