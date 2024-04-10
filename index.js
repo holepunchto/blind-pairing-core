@@ -122,7 +122,7 @@ class CandidateRequest extends EventEmitter {
       throw new Error('Additional data failed verification')
     }
 
-    this.auth = { key, encryptionKey, fastForwardTo: additional ? additional.data : null }
+    this.auth = { key, encryptionKey, data: additional ? additional.data : null }
   }
 
   _onAccept () {
@@ -207,7 +207,7 @@ class MemberRequest {
       status,
       key: null,
       encryptionKey: null,
-      fastForwardTo: null
+      additional: null
     })
     this._payload = createReply(payload, this.session, this.publicKey)
 
