@@ -67,20 +67,17 @@ test('basic valid pairing with encryption key', async t => {
   candidate.handleResponse(member.response)
   const [reply] = await replied
 
-  t.alike(reply, { key, encryptionKey, fastForwardTo: null })
+  t.alike(reply, { key, encryptionKey, data: null })
 })
 
-test('basic valid pairing with encryption key and fastForwardTo', async t => {
+test('basic valid pairing with encryption key and data', async t => {
   t.plan(4)
 
   const key = b4a.allocUnsafe(32).fill(1)
   const encryptionKey = b4a.allocUnsafe(32).fill(2)
-  const fastForwardTo = {
-    key: b4a.allocUnsafe(32).fill(3),
-    length: 10
-  }
+  const data = b4a.allocUnsafe(32).fill(3)
 
-  const { invite, publicKey } = createInvite(key)
+  const { invite, publicKey, additional } = createInvite(key, { data })
 
   const candidate = new CandidateRequest(invite, b4a.from('hello world'))
   const member = MemberRequest.from(candidate.encode())
@@ -91,14 +88,14 @@ test('basic valid pairing with encryption key and fastForwardTo', async t => {
   t.alike(userData, b4a.from('hello world'))
   t.alike(member.id, candidate.id)
 
-  member.confirm({ key, encryptionKey, fastForwardTo })
+  member.confirm({ key, encryptionKey, additional })
 
   const replied = once(candidate, 'accepted')
 
   candidate.handleResponse(member.response)
   const [reply] = await replied
 
-  t.alike(reply, { key, encryptionKey, fastForwardTo })
+  t.alike(reply, { key, encryptionKey, data })
 })
 
 test('does not leak invitee key to unproven inviters', async t => {
@@ -164,9 +161,9 @@ test('invite response is static', async t => {
   req2.handleResponse(res2.response)
   req3.handleResponse(res3.response)
 
-  t.alike(await promise1, { key, encryptionKey, fastForwardTo: null })
-  t.alike(await promise2, { key, encryptionKey, fastForwardTo: null })
-  t.alike(await promise3, { key, encryptionKey, fastForwardTo: null })
+  t.alike(await promise1, { key, encryptionKey, data: null })
+  t.alike(await promise2, { key, encryptionKey, data: null })
+  t.alike(await promise3, { key, encryptionKey, data: null })
 })
 
 test('using a request - response', async t => {
@@ -299,5 +296,5 @@ test('candidate accepted after deny', async t => {
 
   await t.execution(accepted)
 
-  t.alike(candidate.auth, { key, encryptionKey: null, fastForwardTo: null })
+  t.alike(candidate.auth, { key, encryptionKey: null, data: null })
 })
