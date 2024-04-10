@@ -75,12 +75,9 @@ test('basic valid pairing with encryption key and fastForwardTo', async t => {
 
   const key = b4a.allocUnsafe(32).fill(1)
   const encryptionKey = b4a.allocUnsafe(32).fill(2)
-  const fastForwardTo = {
-    key: b4a.allocUnsafe(32).fill(3),
-    length: 10
-  }
+  const fastForwardTo = b4a.allocUnsafe(32).fill(3)
 
-  const { invite, publicKey } = createInvite(key)
+  const { invite, publicKey, additional } = createInvite(key, { data: fastForwardTo })
 
   const candidate = new CandidateRequest(invite, b4a.from('hello world'))
   const member = MemberRequest.from(candidate.encode())
@@ -91,7 +88,7 @@ test('basic valid pairing with encryption key and fastForwardTo', async t => {
   t.alike(userData, b4a.from('hello world'))
   t.alike(member.id, candidate.id)
 
-  member.confirm({ key, encryptionKey, fastForwardTo })
+  member.confirm({ key, encryptionKey, additional })
 
   const replied = once(candidate, 'accepted')
 

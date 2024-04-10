@@ -99,7 +99,7 @@ class CandidateRequest extends EventEmitter {
       throw new Error('Could not decrypt reply.')
     }
 
-    const { status, key, encryptionKey, fastForwardTo } = this.response
+    const { status, key, encryptionKey, additional } = this.response
 
     if (status !== 0) {
       switch (status) {
@@ -118,7 +118,11 @@ class CandidateRequest extends EventEmitter {
       throw new Error('Invite response does not match discoveryKey')
     }
 
-    this.auth = { key, encryptionKey, fastForwardTo }
+    if (additional && !crypto.verify(additional.data, additional.signature, this.keyPair.publicKey)) {
+      throw new Error('Additional data failed verification')
+    }
+
+    this.auth = { key, encryptionKey, fastForwardTo: additional ? additional.data : null }
   }
 
   _onAccept () {
@@ -183,11 +187,11 @@ class MemberRequest {
     )
   }
 
-  confirm ({ key, encryptionKey, fastForwardTo }) {
+  confirm ({ key, encryptionKey, additional }) {
     if (this._confirmed || this._denied || !this._opened) return
     this._confirmed = true
 
-    const payload = c.encode(ResponsePayload, { status: 0, key, encryptionKey, fastForwardTo })
+    const payload = c.encode(ResponsePayload, { status: 0, key, encryptionKey, additional })
     this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
@@ -294,14 +298,23 @@ function createInvite (key, opts = {}) {
     discoveryKey = crypto.discoveryKey(key),
     expires = 0,
     seed = crypto.randomBytes(32),
-    sensitive = false
+    sensitive = false,
+    data
   } = opts
+
   const keyPair = crypto.keyPair(seed)
+  const additional = data
+    ? {
+        data,
+        signature: crypto.sign(data, keyPair.secretKey)
+      }
+    : null
 
   return {
     id: deriveInviteId(keyPair.publicKey),
     invite: c.encode(Invite, { seed, discoveryKey, expires, sensitive }),
     publicKey: keyPair.publicKey,
+    additional,
     discoveryKey,
     expires,
     sensitive
