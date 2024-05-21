@@ -299,7 +299,8 @@ function createInvite (key, opts = {}) {
     expires = 0,
     seed = crypto.randomBytes(32),
     sensitive = false,
-    data
+    data,
+    testBuild = false
   } = opts
 
   const keyPair = crypto.keyPair(seed)
@@ -312,12 +313,13 @@ function createInvite (key, opts = {}) {
 
   return {
     id: deriveInviteId(keyPair.publicKey),
-    invite: c.encode(Invite, { seed, discoveryKey, expires, sensitive }),
+    invite: c.encode(Invite, { seed, discoveryKey, expires, sensitive, testBuild }),
     publicKey: keyPair.publicKey,
     additional,
     discoveryKey,
     expires,
-    sensitive
+    sensitive,
+    testBuild
   }
 }
 
