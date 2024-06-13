@@ -26,6 +26,10 @@
     "url": "https://github.com/holepunchto/blind-pairing-core/issues"
   },
   "homepage": "https://github.com/holepunchto/blind-pairing-core#readme",
+  "files": [
+    "index.js",
+    "lib/**.js"
+  ],
   "dependencies": {
     "b4a": "^1.6.4",
     "compact-encoding": "^2.11.0",
