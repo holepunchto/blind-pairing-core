@@ -3,10 +3,10 @@
   "version": "2.4.0",
   "description": "Core blind pairing module",
   "main": "index.js",
-  "directories": {
-    "lib": "lib",
-    "test": "test"
-  },
+  "files": [
+    "index.js",
+    "lib/**.js"
+  ],
   "scripts": {
     "test": "standard && brittle test/*.js"
   },
