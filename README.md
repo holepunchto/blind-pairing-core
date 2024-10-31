@@ -154,4 +154,5 @@ Decode an `invite` object.
 Verify a previously opened request. Returns `userData` if receipt is valid and `null` otherwise.
 
 ## License
-MIT
+
+Apache-2.0

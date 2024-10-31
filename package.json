@@ -1,5 +1,5 @@
 {
-  "name": "@holepunchto/blind-pairing-core",
+  "name": "blind-pairing-core",
   "version": "2.4.0",
   "description": "Core blind pairing module",
   "main": "index.js",
@@ -21,20 +21,18 @@
     "url": "git+https://github.com/holepunchto/blind-pairing-core.git"
   },
   "author": "Holepunch",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/holepunchto/blind-pairing-core/issues"
   },
   "homepage": "https://github.com/holepunchto/blind-pairing-core#readme",
   "dependencies": {
     "b4a": "^1.6.4",
+    "bare-events": "^2.5.0",
     "compact-encoding": "^2.11.0",
     "hypercore-crypto": "^3.4.0",
     "sodium-universal": "^4.0.0",
     "tiny-buffer-map": "^1.1.1"
-  },
-  "optionalDependencies": {
-    "bare-events": "^2.2.0"
   },
   "devDependencies": {
     "brittle": "^3.2.1",
