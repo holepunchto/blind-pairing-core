@@ -314,6 +314,7 @@ function createInvite (key, opts = {}) {
   return {
     id: deriveInviteId(keyPair.publicKey),
     invite: c.encode(Invite, { seed, discoveryKey, expires, sensitive, testInvitation }),
+    seed,
     publicKey: keyPair.publicKey,
     additional,
     discoveryKey,
