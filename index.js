@@ -254,6 +254,7 @@ module.exports.decodeInvite = decodeInvite
 module.exports.verifyReceipt = verifyReceipt
 module.exports.createReceipt = createReceipt
 module.exports.Invite = Invite
+module.exports.deriveInviteId = deriveInviteId
 
 function createReceipt (invite, userData) {
   const req = new CandidateRequest(invite, userData) // yolo, refactor
