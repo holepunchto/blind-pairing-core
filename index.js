@@ -252,7 +252,13 @@ module.exports.MemberRequest = MemberRequest
 module.exports.createInvite = createInvite
 module.exports.decodeInvite = decodeInvite
 module.exports.verifyReceipt = verifyReceipt
+module.exports.createReceipt = createReceipt
 module.exports.Invite = Invite
+
+function createReceipt (invite, userData) {
+  const req = new CandidateRequest(invite, userData) // yolo, refactor
+  return openAuth(req.payload, req.keyPair.publicKey)
+}
 
 function verifyReceipt (receipt, publicKey) {
   if (b4a.isBuffer(receipt)) {
