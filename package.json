@@ -1,6 +1,6 @@
 {
   "name": "blind-pairing-core",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "description": "Core blind pairing module",
   "main": "index.js",
   "files": [
