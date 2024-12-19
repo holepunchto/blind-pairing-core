@@ -46,7 +46,7 @@ test('basic receipt validation', async t => {
 test('create receipt', t => {
   const key = b4a.allocUnsafe(32).fill(1)
   const { invite, publicKey } = createInvite(key)
-  const receipt = createReceipt(invite, Buffer.from('hello'))
+  const { receipt } = createReceipt(invite, Buffer.from('hello'))
   t.alike(verifyReceipt(receipt, publicKey), Buffer.from('hello'))
 })
 
