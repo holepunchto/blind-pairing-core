@@ -334,7 +334,7 @@ function createInvite (key, opts = {}) {
 function decodeInvite (invite) {
   const data = c.decode(Invite, invite)
   return {
-    id: deriveInviteId(crypto.keyPair(data).publicKey),
+    id: deriveInviteId(crypto.keyPair(data.seed).publicKey),
     ...data
   }
 }
