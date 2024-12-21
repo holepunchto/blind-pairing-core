@@ -332,7 +332,11 @@ function createInvite (key, opts = {}) {
 }
 
 function decodeInvite (invite) {
-  return c.decode(Invite, invite)
+  const data = c.decode(Invite, invite)
+  return {
+    id: deriveInviteId(crypto.keyPair(data).publicKey),
+    ...data
+  }
 }
 
 function encrypt (data, nonce, secretKey) {
