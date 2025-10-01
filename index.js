@@ -33,7 +33,7 @@ const [
 ] = crypto.namespace('blind-pairing', 8)
 
 class CandidateRequest extends EventEmitter {
-  constructor (invite, userData, opts = {}) {
+  constructor(invite, userData, opts = {}) {
     super()
 
     if (b4a.isBuffer(invite)) {
@@ -59,7 +59,7 @@ class CandidateRequest extends EventEmitter {
     this.auth = null
   }
 
-  static from (buf) {
+  static from(buf) {
     const info = c.decode(PersistedRequest, buf)
     const { seed, discoveryKey, userData } = info
     const request = new CandidateRequest({ discoveryKey, seed }, userData)
@@ -74,7 +74,7 @@ class CandidateRequest extends EventEmitter {
     return request
   }
 
-  handleResponse (payload) {
+  handleResponse(payload) {
     if (b4a.isBuffer(payload)) {
       payload = this._decodeResponse(payload)
     }
@@ -91,9 +91,13 @@ class CandidateRequest extends EventEmitter {
     return this.auth
   }
 
-  _openResponse (payload) {
+  _openResponse(payload) {
     try {
-      const response = openReply(payload, this.payload.session, this.keyPair.publicKey)
+      const response = openReply(
+        payload,
+        this.payload.session,
+        this.keyPair.publicKey
+      )
       this.response = c.decode(ResponsePayload, response)
     } catch (e) {
       throw new Error('Could not decrypt reply.')
@@ -118,19 +122,30 @@ class CandidateRequest extends EventEmitter {
       throw new Error('Invite response does not match discoveryKey')
     }
 
-    if (additional && !crypto.verify(additional.data, additional.signature, this.keyPair.publicKey)) {
+    if (
+      additional &&
+      !crypto.verify(
+        additional.data,
+        additional.signature,
+        this.keyPair.publicKey
+      )
+    ) {
       throw new Error('Additional data failed verification')
     }
 
-    this.auth = { key, encryptionKey, data: additional ? additional.data : null }
+    this.auth = {
+      key,
+      encryptionKey,
+      data: additional ? additional.data : null
+    }
   }
 
-  _onAccept () {
+  _onAccept() {
     this.emit('accepted', this.auth)
     this.destroy()
   }
 
-  _decodeResponse (buf) {
+  _decodeResponse(buf) {
     try {
       const { payload } = c.decode(InviteResponse, buf)
       return payload
@@ -139,21 +154,21 @@ class CandidateRequest extends EventEmitter {
     }
   }
 
-  destroy () {
+  destroy() {
     this.token = null
     this.payload = null
 
     this.emit('destroyed')
   }
 
-  encode () {
+  encode() {
     if (!this._encoded) this._encoded = c.encode(InviteRequest, this)
     return this._encoded
   }
 }
 
 class MemberRequest {
-  constructor (inviteId, requestData) {
+  constructor(inviteId, requestData) {
     this.inviteId = inviteId
     this.requestData = requestData
 
@@ -176,28 +191,30 @@ class MemberRequest {
     this.response = null
   }
 
-  static from (req) {
+  static from(req) {
     if (b4a.isBuffer(req)) {
       return MemberRequest.from(c.decode(InviteRequest, req))
     }
 
-    return new MemberRequest(
-      req.inviteId,
-      req.payload
-    )
+    return new MemberRequest(req.inviteId, req.payload)
   }
 
-  confirm ({ key, encryptionKey, additional }) {
+  confirm({ key, encryptionKey, additional }) {
     if (this._confirmed || this._denied || !this._opened) return
     this._confirmed = true
 
-    const payload = c.encode(ResponsePayload, { status: 0, key, encryptionKey, additional })
+    const payload = c.encode(ResponsePayload, {
+      status: 0,
+      key,
+      encryptionKey,
+      additional
+    })
     this._payload = createReply(payload, this.session, this.publicKey)
 
     this._respond()
   }
 
-  deny ({ status = 1 } = {}) {
+  deny({ status = 1 } = {}) {
     if (this._confirmed || this._denied) return
     this._denied = true
 
@@ -214,19 +231,20 @@ class MemberRequest {
     this._respond()
   }
 
-  respond () {
+  respond() {
     return {
       id: this.id,
       payload: this._payload
     }
   }
 
-  _respond () {
+  _respond() {
     this.response = c.encode(InviteResponse, this.respond())
   }
 
-  open (publicKey) {
-    if (this._opened && b4a.equals(this.publicKey, publicKey)) return this.userData
+  open(publicKey) {
+    if (this._opened && b4a.equals(this.publicKey, publicKey))
+      return this.userData
 
     try {
       this.receipt = openAuth(this.requestData, publicKey)
@@ -255,13 +273,13 @@ module.exports.verifyReceipt = verifyReceipt
 module.exports.createReceipt = createReceipt
 module.exports.Invite = Invite
 
-function createReceipt (invite, userData) {
+function createReceipt(invite, userData) {
   const req = new CandidateRequest(invite, userData) // yolo, refactor
   const receipt = openAuth(req.payload, req.keyPair.publicKey)
   return { id: deriveInviteId(req.keyPair.publicKey), receipt }
 }
 
-function verifyReceipt (receipt, publicKey) {
+function verifyReceipt(receipt, publicKey) {
   if (b4a.isBuffer(receipt)) {
     receipt = c.decode(InviteReceipt, receipt)
   }
@@ -274,33 +292,37 @@ function verifyReceipt (receipt, publicKey) {
   return userData
 }
 
-function deriveInviteId (publicKey) {
+function deriveInviteId(publicKey) {
   return crypto.hash([NS_INVITE_ID, publicKey])
 }
 
-function deriveKey (publicKey) {
-  const out = b4a.allocUnsafe(sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES)
+function deriveKey(publicKey) {
+  const out = b4a.allocUnsafe(
+    sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES
+  )
   return crypto.hash([NS_ENCRYPT, publicKey], out)
 }
 
-function deriveNonce (publicKey, sessionToken) {
-  const out = b4a.allocUnsafe(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES)
+function deriveNonce(publicKey, sessionToken) {
+  const out = b4a.allocUnsafe(
+    sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES
+  )
   return crypto.hash([NS_NONCE, publicKey, sessionToken], out)
 }
 
-function deriveToken (publicKey, userData) {
+function deriveToken(publicKey, userData) {
   return crypto.hash([NS_TOKEN, publicKey, userData])
 }
 
-function createSessionToken (token) {
+function createSessionToken(token) {
   return crypto.hash([NS_SESSION, token])
 }
 
-function deriveRequestId (sessionToken) {
+function deriveRequestId(sessionToken) {
   return crypto.hash([NS_REQUEST_ID, sessionToken])
 }
 
-function createInvite (key, opts = {}) {
+function createInvite(key, opts = {}) {
   const {
     discoveryKey = crypto.discoveryKey(key),
     expires = 0,
@@ -320,7 +342,13 @@ function createInvite (key, opts = {}) {
 
   return {
     id: deriveInviteId(keyPair.publicKey),
-    invite: c.encode(Invite, { seed, discoveryKey, expires, sensitive, testInvitation }),
+    invite: c.encode(Invite, {
+      seed,
+      discoveryKey,
+      expires,
+      sensitive,
+      testInvitation
+    }),
     seed,
     publicKey: keyPair.publicKey,
     additional,
@@ -331,7 +359,7 @@ function createInvite (key, opts = {}) {
   }
 }
 
-function decodeInvite (invite) {
+function decodeInvite(invite) {
   const data = c.decode(Invite, invite)
   return {
     id: deriveInviteId(crypto.keyPair(data.seed).publicKey),
@@ -339,19 +367,37 @@ function decodeInvite (invite) {
   }
 }
 
-function encrypt (data, nonce, secretKey) {
-  const output = b4a.allocUnsafe(data.byteLength + sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES)
-  sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(output, data, nonce, null, nonce, secretKey)
+function encrypt(data, nonce, secretKey) {
+  const output = b4a.allocUnsafe(
+    data.byteLength + sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES
+  )
+  sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+    output,
+    data,
+    nonce,
+    null,
+    nonce,
+    secretKey
+  )
   return output
 }
 
-function decrypt (data, nonce, secretKey) {
-  const output = b4a.allocUnsafe(data.byteLength - sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES)
-  sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(output, null, data, nonce, nonce, secretKey)
+function decrypt(data, nonce, secretKey) {
+  const output = b4a.allocUnsafe(
+    data.byteLength - sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES
+  )
+  sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+    output,
+    null,
+    data,
+    nonce,
+    nonce,
+    secretKey
+  )
   return output
 }
 
-function createAuth (userData, invitationKeyPair, session) {
+function createAuth(userData, invitationKeyPair, session) {
   const secret = deriveKey(invitationKeyPair.publicKey)
 
   const nonce = deriveNonce(invitationKeyPair.publicKey, session)
@@ -367,7 +413,7 @@ function createAuth (userData, invitationKeyPair, session) {
   }
 }
 
-function openAuth (payload, invitationKey) {
+function openAuth(payload, invitationKey) {
   const secret = deriveKey(invitationKey)
 
   const { session, data } = payload
@@ -392,7 +438,7 @@ function openAuth (payload, invitationKey) {
   return c.encode(InviteReceipt, { session, signature, userData })
 }
 
-function createReply (payload, sessionToken, invitationKey) {
+function createReply(payload, sessionToken, invitationKey) {
   const sessionKey = crypto.hash([NS_SESSION_KEY, invitationKey, sessionToken])
   const secret = deriveKey(sessionKey)
   const nonce = deriveNonce(sessionKey, sessionToken)
@@ -400,7 +446,7 @@ function createReply (payload, sessionToken, invitationKey) {
   return encrypt(payload, nonce, secret)
 }
 
-function openReply (data, sessionToken, invitationKey) {
+function openReply(data, sessionToken, invitationKey) {
   const sessionKey = crypto.hash([NS_SESSION_KEY, invitationKey, sessionToken])
   const secret = deriveKey(sessionKey)
   const nonce = deriveNonce(sessionKey, sessionToken)
@@ -408,7 +454,7 @@ function openReply (data, sessionToken, invitationKey) {
   return decrypt(data, nonce, secret)
 }
 
-function createSignature (data, secretKey) {
+function createSignature(data, secretKey) {
   const signature = b4a.allocUnsafe(sodium.crypto_sign_BYTES)
   const namespaced = b4a.allocUnsafe(32 + data.byteLength)
 
@@ -420,7 +466,7 @@ function createSignature (data, secretKey) {
   return signature
 }
 
-function verifySignature (data, signature, publicKey) {
+function verifySignature(data, signature, publicKey) {
   const namespaced = b4a.allocUnsafe(32 + data.byteLength)
 
   namespaced.set(NS_SIGNATURE, 0)

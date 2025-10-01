@@ -2,9 +2,15 @@ const { once } = require('events')
 const test = require('brittle')
 const b4a = require('b4a')
 
-const { CandidateRequest, MemberRequest, createInvite, verifyReceipt, createReceipt } = require('..')
+const {
+  CandidateRequest,
+  MemberRequest,
+  createInvite,
+  verifyReceipt,
+  createReceipt
+} = require('..')
 
-test('basic valid pairing', async t => {
+test('basic valid pairing', async (t) => {
   const key = b4a.allocUnsafe(32).fill(1)
 
   const { invite, publicKey } = createInvite(key)
@@ -28,7 +34,7 @@ test('basic valid pairing', async t => {
   t.alike(reply.key, key)
 })
 
-test('basic receipt validation', async t => {
+test('basic receipt validation', async (t) => {
   t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -43,14 +49,14 @@ test('basic receipt validation', async t => {
   t.alike(verifyReceipt(member.receipt.fill(0), publicKey), null)
 })
 
-test('create receipt', t => {
+test('create receipt', (t) => {
   const key = b4a.allocUnsafe(32).fill(1)
   const { invite, publicKey } = createInvite(key)
   const { receipt } = createReceipt(invite, Buffer.from('hello'))
   t.alike(verifyReceipt(receipt, publicKey), Buffer.from('hello'))
 })
 
-test('basic valid pairing with encryption key', async t => {
+test('basic valid pairing with encryption key', async (t) => {
   t.plan(4)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -77,7 +83,7 @@ test('basic valid pairing with encryption key', async t => {
   t.alike(reply, { key, encryptionKey, data: null })
 })
 
-test('basic valid pairing with encryption key and data', async t => {
+test('basic valid pairing with encryption key and data', async (t) => {
   t.plan(4)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -105,7 +111,7 @@ test('basic valid pairing with encryption key and data', async t => {
   t.alike(reply, { key, encryptionKey, data })
 })
 
-test('does not leak invitee key to unproven inviters', async t => {
+test('does not leak invitee key to unproven inviters', async (t) => {
   t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -121,7 +127,7 @@ test('does not leak invitee key to unproven inviters', async t => {
   t.alike(res.userData, null)
 })
 
-test('invite response is static', async t => {
+test('invite response is static', async (t) => {
   t.plan(12)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -160,9 +166,9 @@ test('invite response is static', async t => {
   t.unlike(res2.response, res1.response)
   t.unlike(res3.response, res1.response)
 
-  const promise1 = new Promise(resolve => req1.on('accepted', resolve))
-  const promise2 = new Promise(resolve => req2.on('accepted', resolve))
-  const promise3 = new Promise(resolve => req3.on('accepted', resolve))
+  const promise1 = new Promise((resolve) => req1.on('accepted', resolve))
+  const promise2 = new Promise((resolve) => req2.on('accepted', resolve))
+  const promise3 = new Promise((resolve) => req3.on('accepted', resolve))
 
   req1.handleResponse(res1.response)
   req2.handleResponse(res2.response)
@@ -173,7 +179,7 @@ test('invite response is static', async t => {
   t.alike(await promise3, { key, encryptionKey, data: null })
 })
 
-test('using a request - response', async t => {
+test('using a request - response', async (t) => {
   t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -195,7 +201,7 @@ test('using a request - response', async t => {
   t.alike(reply.key, key)
 })
 
-test('restoring a request', async t => {
+test('restoring a request', async (t) => {
   t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -212,7 +218,7 @@ test('restoring a request', async t => {
 
   const req2 = new CandidateRequest(invite, b4a.from('hello world'))
 
-  req2.on('rejected', err => t.fail(err))
+  req2.on('rejected', (err) => t.fail(err))
 
   const accept = once(req2, 'accepted')
   req2.handleResponse(res.response)
@@ -221,7 +227,7 @@ test('restoring a request', async t => {
   t.alike(reply.key, key)
 })
 
-test('pass session token', async t => {
+test('pass session token', async (t) => {
   t.plan(4)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -229,7 +235,9 @@ test('pass session token', async t => {
 
   const { invite, publicKey } = createInvite(key)
 
-  const candidate = new CandidateRequest(invite, b4a.from('hello world'), { session })
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'), {
+    session
+  })
 
   t.alike(candidate.session, session)
 
@@ -249,7 +257,7 @@ test('pass session token', async t => {
   t.alike(reply.key, key)
 })
 
-test('deny request', async t => {
+test('deny request', async (t) => {
   t.plan(2)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -257,7 +265,9 @@ test('deny request', async t => {
 
   const { invite, publicKey } = createInvite(key)
 
-  const candidate = new CandidateRequest(invite, b4a.from('hello world'), { session })
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'), {
+    session
+  })
 
   const member = MemberRequest.from(candidate.encode())
   member.open(publicKey)
@@ -273,7 +283,7 @@ test('deny request', async t => {
   t.alike(candidate.auth, null)
 })
 
-test('candidate accepted after deny', async t => {
+test('candidate accepted after deny', async (t) => {
   t.plan(3)
 
   const key = b4a.allocUnsafe(32).fill(1)
@@ -281,7 +291,9 @@ test('candidate accepted after deny', async t => {
 
   const { invite, publicKey } = createInvite(key)
 
-  const candidate = new CandidateRequest(invite, b4a.from('hello world'), { session })
+  const candidate = new CandidateRequest(invite, b4a.from('hello world'), {
+    session
+  })
 
   const member = MemberRequest.from(candidate.encode())
   member.open(publicKey)

@@ -3,6 +3,7 @@
 ### Pairing Flow
 
 The pairing flow proceeds as follows:
+
 1. The member (inviter) creates an invitation (a new signing keypair) and shares `{ discoveryKey, seed }` with a candidate (invitee). `publicKey` is set aside for later use.
 2. The candidate produces a request with arbitrary `userData` signed by the invitation keyPair, this is encrypted to a key derived from the invite `publicKey`.
 3. Upon receiving the request, the member decrypts the payload and verifies the signature against the invitation `publicKey`, proving that the invitee has `secretKey`.
@@ -12,7 +13,11 @@ The pairing flow proceeds as follows:
 ## Usage
 
 ```js
-import { CandidateRequest, MemberRequest, createInvite } from 'blind-pairing-core'
+import {
+  CandidateRequest,
+  MemberRequest,
+  createInvite
+} from 'blind-pairing-core'
 
 const { invite, publicKey } = createInvite(key) // key is a Hypercore or Autobase key
 
@@ -21,7 +26,7 @@ const { invite, publicKey } = createInvite(key) // key is a Hypercore or Autobas
 const candidate = new CandidateRequest(invite, { userData: 'hello world' })
 candidate.on('accepted', () => console.log('accepted!'))
 
-const transport = candidate.encode() 
+const transport = candidate.encode()
 
 // member
 
@@ -43,6 +48,7 @@ console.log(candidate.auth) // { key }
 ## API
 
 exports:
+
 ```
 {
   CandidateRequest,
