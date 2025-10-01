@@ -8,7 +8,8 @@
     "lib/**.js"
   ],
   "scripts": {
-    "test": "standard && brittle test/*.js"
+    "format": "prettier . --write",
+    "test": "prettier . --check && brittle test/*.js"
   },
   "imports": {
     "events": {
@@ -29,13 +30,14 @@
   "dependencies": {
     "b4a": "^1.6.4",
     "bare-events": "^2.5.0",
-    "compact-encoding": "^2.11.0",
+    "compact-encoding": "^2.17.0",
     "hypercore-crypto": "^3.4.0",
     "sodium-universal": "^5.0.1",
     "tiny-buffer-map": "^1.1.1"
   },
   "devDependencies": {
     "brittle": "^3.2.1",
-    "standard": "^17.0.0"
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^1.0.0"
   }
 }
