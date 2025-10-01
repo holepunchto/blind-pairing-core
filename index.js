@@ -329,7 +329,8 @@ function createInvite(key, opts = {}) {
     seed = crypto.randomBytes(32),
     sensitive = false,
     data,
-    testInvitation = false
+    testInvitation = false,
+    additionalNodes
   } = opts
 
   const keyPair = crypto.keyPair(seed)
@@ -347,7 +348,8 @@ function createInvite(key, opts = {}) {
       discoveryKey,
       expires,
       sensitive,
-      testInvitation
+      testInvitation,
+      additionalNodes
     }),
     seed,
     publicKey: keyPair.publicKey,
