@@ -30,6 +30,7 @@
   "dependencies": {
     "b4a": "^1.6.4",
     "bare-events": "^2.5.0",
+    "bogon": "^1.1.0",
     "compact-encoding": "^2.17.0",
     "hypercore-crypto": "^3.4.0",
     "sodium-universal": "^5.0.1",
